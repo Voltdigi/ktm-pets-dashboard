@@ -1,6 +1,6 @@
 "use client"
 
-import { useRef, useState } from "react"
+import { useRef, useState, useEffect } from "react"
 import { FloatingSidebar } from "@/components/floating-sidebar"
 import { ThemeToggle } from "@/components/theme-toggle"
 import {
@@ -26,7 +26,26 @@ export default function QRGeneratorPage() {
   const [url, setUrl] = useState("")
   const [error, setError] = useState("")
   const [generatedUrl, setGeneratedUrl] = useState("")
+  const [isDark, setIsDark] = useState(false)
   const containerRef = useRef<HTMLDivElement>(null)
+
+  useEffect(() => {
+    // Detect if dark mode is enabled
+    const darkMode = document.documentElement.classList.contains("dark")
+    setIsDark(darkMode)
+
+    const observer = new MutationObserver(() => {
+      const isDarkNow = document.documentElement.classList.contains("dark")
+      setIsDark(isDarkNow)
+    })
+
+    observer.observe(document.documentElement, {
+      attributes: true,
+      attributeFilter: ["class"],
+    })
+
+    return () => observer.disconnect()
+  }, [])
 
   const isValidUrl = (urlString: string): boolean => {
     if (!urlString) return false
@@ -161,8 +180,8 @@ export default function QRGeneratorPage() {
                           value={generatedUrl}
                           size={256}
                           level="M"
-                          fgColor="hsl(var(--foreground))"
-                          bgColor="hsl(var(--background))"
+                          fgColor={isDark ? "#ffffff" : "#000000"}
+                          bgColor={isDark ? "#000000" : "#ffffff"}
                         />
                       </div>
 
