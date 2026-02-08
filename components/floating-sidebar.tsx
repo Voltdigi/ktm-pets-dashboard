@@ -1,16 +1,15 @@
 "use client"
 
 import { useState } from "react"
+import { usePathname } from "next/navigation"
+import Link from "next/link"
 import { cn } from "@/lib/utils"
 import { Button } from "@/components/ui/button"
 import {
   RiMenuLine,
   RiCloseLine,
   RiDashboardLine,
-  RiSettingsLine,
-  RiUserLine,
-  RiBellLine,
-  RiFileTextLine,
+  RiQrCodeLine,
   RiLogoutBoxLine,
 } from "@remixicon/react"
 
@@ -18,41 +17,24 @@ interface NavItem {
   label: string
   icon: React.ReactNode
   href: string
-  badge?: number
 }
 
 const navItems: NavItem[] = [
   {
     label: "Dashboard",
     icon: <RiDashboardLine className="w-5 h-5" />,
-    href: "#dashboard",
+    href: "/dashboard",
   },
   {
-    label: "Notifications",
-    icon: <RiBellLine className="w-5 h-5" />,
-    href: "#notifications",
-    badge: 3,
-  },
-  {
-    label: "Reports",
-    icon: <RiFileTextLine className="w-5 h-5" />,
-    href: "#reports",
-  },
-  {
-    label: "Profile",
-    icon: <RiUserLine className="w-5 h-5" />,
-    href: "#profile",
-  },
-  {
-    label: "Settings",
-    icon: <RiSettingsLine className="w-5 h-5" />,
-    href: "#settings",
+    label: "QR Generator",
+    icon: <RiQrCodeLine className="w-5 h-5" />,
+    href: "/dashboard/qr-generator",
   },
 ]
 
 export function FloatingSidebar() {
   const [isOpen, setIsOpen] = useState(false)
-  const [activeItem, setActiveItem] = useState("dashboard")
+  const pathname = usePathname()
 
   return (
     <>
@@ -88,32 +70,30 @@ export function FloatingSidebar() {
 
         {/* Navigation Items */}
         <nav className="flex flex-col gap-1 p-4">
-          {navItems.map((item) => (
-            <button
-              key={item.label}
-              onClick={() => setActiveItem(item.label.toLowerCase())}
-              className={cn(
-                "group relative flex items-center gap-3 rounded-lg px-3 py-3 text-sm font-medium transition-all duration-200",
-                activeItem === item.label.toLowerCase()
-                  ? "bg-primary/10 text-primary"
-                  : "text-foreground/70 hover:text-foreground hover:bg-secondary/50"
-              )}
-            >
-              {/* Active indicator bar */}
-              {activeItem === item.label.toLowerCase() && (
-                <div className="absolute left-0 top-0 h-full w-1 bg-primary rounded-r-full" />
-              )}
+          {navItems.map((item) => {
+            const isActive = pathname === item.href
+            return (
+              <Link
+                key={item.label}
+                href={item.href}
+                onClick={() => setIsOpen(false)}
+                className={cn(
+                  "group relative flex items-center gap-3 rounded-lg px-3 py-3 text-sm font-medium transition-all duration-200",
+                  isActive
+                    ? "bg-primary/10 text-primary"
+                    : "text-foreground/70 hover:text-foreground hover:bg-secondary/50"
+                )}
+              >
+                {/* Active indicator bar */}
+                {isActive && (
+                  <div className="absolute left-0 top-0 h-full w-1 bg-primary rounded-r-full" />
+                )}
 
-              {item.icon}
-              <span className="flex-1 text-left">{item.label}</span>
-
-              {item.badge && (
-                <span className="inline-flex items-center justify-center w-5 h-5 text-xs font-bold text-white bg-primary rounded-full">
-                  {item.badge}
-                </span>
-              )}
-            </button>
-          ))}
+                {item.icon}
+                <span className="flex-1 text-left">{item.label}</span>
+              </Link>
+            )
+          })}
         </nav>
 
         {/* Divider */}
