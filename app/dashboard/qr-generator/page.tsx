@@ -25,6 +25,7 @@ import { downloadQRCode } from "@/lib/qr-utils"
 export default function QRGeneratorPage() {
   const [url, setUrl] = useState("")
   const [error, setError] = useState("")
+  const [generatedUrl, setGeneratedUrl] = useState("")
   const containerRef = useRef<HTMLDivElement>(null)
 
   const isValidUrl = (urlString: string): boolean => {
@@ -46,7 +47,16 @@ export default function QRGeneratorPage() {
     }
   }
 
-  const showQR = url && !error && isValidUrl(url)
+  const handleGenerate = () => {
+    if (isValidUrl(url)) {
+      setGeneratedUrl(url)
+      setError("")
+    } else {
+      setError("Please enter a valid URL starting with http:// or https://")
+    }
+  }
+
+  const showQR = generatedUrl && !error
 
   const handleDownload = async () => {
     if (!containerRef.current) return
@@ -104,60 +114,77 @@ export default function QRGeneratorPage() {
             </CardHeader>
 
             <CardContent className="space-y-8">
-              {/* URL Input Section */}
-              <Field>
-                <FieldLabel>
-                  <span className="font-medium">URL</span>
-                  <FieldDescription>
-                    Enter the URL you want to encode
-                  </FieldDescription>
-                </FieldLabel>
-                <Input
-                  type="url"
-                  placeholder="https://example.com"
-                  value={url}
-                  onChange={(e) => handleUrlChange(e.target.value)}
-                  className="mt-2"
-                />
-                {error && <FieldError>{error}</FieldError>}
-              </Field>
-
-              {/* QR Code Display Section */}
-              {showQR && (
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+                {/* Left: Input Section */}
                 <div className="space-y-4">
-                  <div
-                    ref={containerRef}
-                    className="flex flex-col items-center justify-center p-8 bg-background border border-border rounded-lg"
-                  >
-                    <QRCode
+                  <Field>
+                    <FieldLabel>
+                      <span className="font-medium">URL</span>
+                      <FieldDescription>
+                        Enter the URL you want to encode
+                      </FieldDescription>
+                    </FieldLabel>
+                    <Input
+                      type="url"
+                      placeholder="https://example.com"
                       value={url}
-                      size={256}
-                      level="M"
-                      fgColor="hsl(var(--foreground))"
-                      bgColor="hsl(var(--background))"
+                      onChange={(e) => handleUrlChange(e.target.value)}
+                      className="mt-2"
                     />
-                  </div>
+                    {error && <FieldError>{error}</FieldError>}
+                  </Field>
 
-                  {/* Download Button */}
+                  {/* Generate Button */}
                   <Button
-                    onClick={handleDownload}
-                    className="w-full gap-2"
+                    onClick={handleGenerate}
+                    disabled={!url || !!error}
+                    className="w-full"
                     size="lg"
                   >
-                    <RiDownloadLine className="w-4 h-4" />
-                    Download QR Code (PNG)
+                    Generate QR Code
                   </Button>
                 </div>
-              )}
 
-              {/* Empty State */}
-              {!showQR && !error && (
-                <div className="text-center py-12">
-                  <p className="text-muted-foreground">
-                    Enter a valid URL to generate a QR code
-                  </p>
+                {/* Right: Preview Section */}
+                <div className="space-y-4">
+                  <div className="text-sm font-medium text-foreground">
+                    Preview
+                  </div>
+
+                  {showQR ? (
+                    <>
+                      <div
+                        ref={containerRef}
+                        className="flex items-center justify-center p-8 bg-secondary/50 border border-border rounded-lg min-h-80"
+                      >
+                        <QRCode
+                          value={generatedUrl}
+                          size={256}
+                          level="M"
+                          fgColor="hsl(var(--foreground))"
+                          bgColor="hsl(var(--background))"
+                        />
+                      </div>
+
+                      {/* Download Button */}
+                      <Button
+                        onClick={handleDownload}
+                        className="w-full gap-2"
+                        size="lg"
+                      >
+                        <RiDownloadLine className="w-4 h-4" />
+                        Download QR Code (PNG)
+                      </Button>
+                    </>
+                  ) : (
+                    <div className="flex items-center justify-center p-8 bg-secondary/50 border border-dashed border-border rounded-lg min-h-80 text-muted-foreground">
+                      <p className="text-center">
+                        QR code will appear here
+                      </p>
+                    </div>
+                  )}
                 </div>
-              )}
+              </div>
             </CardContent>
           </Card>
         </div>
