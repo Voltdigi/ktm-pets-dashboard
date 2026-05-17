@@ -189,6 +189,7 @@ export async function POST(request: NextRequest) {
       success: true,
       message: "Client and pet records created/updated successfully",
       clientId: clientRecord[0].id,
+      redirectUrl: "https://ktmpets.com/thanks",
     });
   } catch (error) {
     console.error("JotForm webhook error:", error);
