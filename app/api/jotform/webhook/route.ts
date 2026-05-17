@@ -185,12 +185,7 @@ export async function POST(request: NextRequest) {
       console.log("Skipping pet creation - no pet name");
     }
 
-    return NextResponse.json({
-      success: true,
-      message: "Client and pet records created/updated successfully",
-      clientId: clientRecord[0].id,
-      redirectUrl: "https://ktmpets.com/thanks",
-    });
+    return NextResponse.redirect("https://ktmpets.com/thanks", { status: 303 });
   } catch (error) {
     console.error("JotForm webhook error:", error);
     return NextResponse.json(
