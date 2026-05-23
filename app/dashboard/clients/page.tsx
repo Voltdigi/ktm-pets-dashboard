@@ -1,10 +1,7 @@
 "use client"
 
-import { useState } from "react"
 import { useAirtableData } from "@/hooks/useClients"
 import { FloatingSidebar } from "@/components/floating-sidebar"
-import { ThemeToggle } from "@/components/theme-toggle"
-import { DataTabs } from "@/components/data-tabs"
 import {
   Card,
   CardContent,
@@ -12,16 +9,10 @@ import {
 import { Button } from "@/components/ui/button"
 import { RiRefreshLine } from "@remixicon/react"
 
-const TABLE_TABS = [
-  { id: "clients", label: "Clients", tableId: process.env.NEXT_PUBLIC_CLIENTS_TABLE_ID || "" },
-  { id: "pets", label: "Pets", tableId: process.env.NEXT_PUBLIC_PETS_TABLE_ID || "" },
-  { id: "services", label: "Service Requests", tableId: process.env.NEXT_PUBLIC_SERVICE_REQUESTS_TABLE_ID || "" },
-  { id: "bookings", label: "Confirmed Bookings", tableId: process.env.NEXT_PUBLIC_CONFIRMED_BOOKINGS_TABLE_ID || "" },
-]
-export default function DashboardPage() {
-  const [activeTabId, setActiveTabId] = useState("clients")
-  const activeTab = TABLE_TABS.find((tab) => tab.id === activeTabId) || TABLE_TABS[0]
-  const { data, loading, error, refetch } = useAirtableData(activeTab.tableId)
+export default function ClientsPage() {
+  const { data, loading, error, refetch } = useAirtableData(
+    process.env.NEXT_PUBLIC_CLIENTS_TABLE_ID || ""
+  )
 
   return (
     <div className="min-h-screen bg-background text-foreground">
@@ -30,15 +21,11 @@ export default function DashboardPage() {
         <div className="flex items-center justify-between px-4 py-4 sm:px-6 lg:px-8 pl-28 sm:pl-6">
           <div className="flex items-center gap-3">
             <div className="hidden sm:block">
-              <h1 className="text-2xl font-bold tracking-tight pl-8">KTM Dashboard</h1>
+              <h1 className="text-2xl font-bold tracking-tight pl-8">Clients</h1>
             </div>
             <div className="sm:hidden">
-              <h1 className="text-lg font-bold pl-8">KTM Dashboard</h1>
+              <h1 className="text-lg font-bold pl-8">Clients</h1>
             </div>
-          </div>
-
-          <div className="flex items-center gap-2">
-            <ThemeToggle />
           </div>
         </div>
       </header>
@@ -49,10 +36,10 @@ export default function DashboardPage() {
       {/* Main Content */}
       <main className="px-4 py-8 sm:px-6 lg:px-8">
         <div className="mx-auto max-w-7xl">
-          {/* Data Viewer Card */}
+          {/* Clients Card */}
           <Card className="min-h-96">
             <div className="flex items-center justify-between px-6 pt-6 pb-0 mb-6">
-              <h2 className="text-xl font-semibold">Database</h2>
+              <h2 className="text-xl font-semibold">All Clients</h2>
               <Button
                 variant="outline"
                 size="sm"
@@ -63,29 +50,23 @@ export default function DashboardPage() {
               </Button>
             </div>
 
-            <DataTabs
-              tabs={TABLE_TABS}
-              activeTab={activeTabId}
-              onTabChange={setActiveTabId}
-            />
-
             <CardContent className="p-6">
               {loading && (
                 <div className="text-center py-8 text-muted-foreground">
-                  Loading {activeTab.label.toLowerCase()}...
+                  Loading clients...
                 </div>
               )}
 
               {error && (
                 <div className="text-center py-8 text-red-600 dark:text-red-400">
-                  <p className="font-medium">Error loading data</p>
+                  <p className="font-medium">Error loading clients</p>
                   <p className="text-sm mt-1">{error}</p>
                 </div>
               )}
 
               {!loading && !error && data.length === 0 && (
                 <div className="text-center py-8 text-muted-foreground">
-                  No {activeTab.label.toLowerCase()} found
+                  No clients found
                 </div>
               )}
 

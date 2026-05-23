@@ -102,13 +102,10 @@ export default function QRGeneratorPage() {
         <div className="flex items-center justify-between px-4 py-4 sm:px-6 lg:px-8 pl-28 sm:pl-6">
           <div className="flex items-center gap-3">
             <div className="hidden sm:block">
-              <h1 className="text-2xl font-bold tracking-tight">QR Generator</h1>
-              <p className="text-sm text-muted-foreground">
-                Generate QR codes from any URL
-              </p>
+              <h1 className="text-2xl font-bold tracking-tight pl-8">QR Generator</h1>
             </div>
             <div className="sm:hidden">
-              <h1 className="text-lg font-bold">QR Generator</h1>
+              <h1 className="text-lg font-bold pl-8">QR Generator</h1>
             </div>
           </div>
 
