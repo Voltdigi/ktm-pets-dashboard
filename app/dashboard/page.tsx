@@ -5,6 +5,7 @@ import { useAirtableData } from "@/hooks/useClients"
 import { FloatingSidebar } from "@/components/floating-sidebar"
 import { ThemeToggle } from "@/components/theme-toggle"
 import { DataTabs } from "@/components/data-tabs"
+import { ServiceRequestCard } from "@/components/service-request-card"
 import {
   Card,
   CardContent,
@@ -22,6 +23,36 @@ export default function DashboardPage() {
   const [activeTabId, setActiveTabId] = useState("clients")
   const activeTab = TABLE_TABS.find((tab) => tab.id === activeTabId) || TABLE_TABS[0]
   const { data, loading, error, refetch } = useAirtableData(activeTab.tableId)
+
+  const handleStatusUpdate = async (recordId: string, newStatus: string) => {
+    try {
+      const response = await fetch("/api/square/update-service-request", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          recordId,
+          newStatus,
+        }),
+      })
+
+      const result = await response.json()
+
+      if (!response.ok) {
+        throw new Error(result.error || result.message || "Failed to update status")
+      }
+
+      // Refresh data after successful update
+      setTimeout(() => {
+        refetch()
+      }, 1000)
+
+      return result
+    } catch (error) {
+      throw error
+    }
+  }
 
   return (
     <div className="min-h-screen bg-background text-foreground">
@@ -92,25 +123,33 @@ export default function DashboardPage() {
               {!loading && !error && data.length > 0 && (
                 <div className="space-y-3 overflow-y-auto max-h-96">
                   {data.map((record) => (
-                    <div
-                      key={record.id}
-                      className="p-4 border border-border/40 rounded-lg hover:bg-secondary/50 transition-colors"
-                    >
-                      <div className="space-y-2">
-                        {Object.entries(record.fields).map(([key, value]) => (
-                          <div key={key} className="text-sm">
-                            <span className="font-medium text-foreground/70">
-                              {key}:
-                            </span>
-                            <span className="ml-2 text-foreground">
-                              {typeof value === "object"
-                                ? JSON.stringify(value)
-                                : String(value)}
-                            </span>
-                          </div>
-                        ))}
+                    activeTabId === "services" ? (
+                      <ServiceRequestCard
+                        key={record.id}
+                        record={record}
+                        onStatusUpdate={handleStatusUpdate}
+                      />
+                    ) : (
+                      <div
+                        key={record.id}
+                        className="p-4 border border-border/40 rounded-lg hover:bg-secondary/50 transition-colors"
+                      >
+                        <div className="space-y-2">
+                          {Object.entries(record.fields).map(([key, value]) => (
+                            <div key={key} className="text-sm">
+                              <span className="font-medium text-foreground/70">
+                                {key}:
+                              </span>
+                              <span className="ml-2 text-foreground">
+                                {typeof value === "object"
+                                  ? JSON.stringify(value)
+                                  : String(value)}
+                              </span>
+                            </div>
+                          ))}
+                        </div>
                       </div>
-                    </div>
+                    )
                   ))}
                 </div>
               )}
