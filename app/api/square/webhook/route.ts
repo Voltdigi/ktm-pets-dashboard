@@ -4,6 +4,7 @@ import {
   findServiceRequestByInvoiceId,
   updateServiceRequest,
   getServiceRequest,
+  createConfirmedBookings,
 } from "../airtable";
 import { publishInvoice, getInvoiceById } from "../utils";
 
@@ -69,21 +70,41 @@ async function handleInvoicePaymentMade(invoiceId: string) {
         status: "Deposit Paid",
       });
 
+      // Create confirmed booking records for each date
+      try {
+        const serviceRequest = await getServiceRequest(recordId);
+        await createConfirmedBookings(serviceRequest);
+      } catch (error) {
+        console.error("Error creating confirmed bookings:", error);
+        // Don't fail the entire webhook if booking creation fails
+      }
+
       // If balance invoice hasn't been published yet, publish it now
       if (squareBalanceInvoiceId) {
-        try {
-          const balanceInvoice = await getInvoiceById(squareBalanceInvoiceId);
+        const balancePublished = fields["Balance Invoice Published"];
 
-          if (balanceInvoice && balanceInvoice.version !== undefined) {
-            console.log(`Publishing balance invoice ${squareBalanceInvoiceId} (version ${balanceInvoice.version})`);
-            await publishInvoice(squareBalanceInvoiceId, balanceInvoice.version);
-            console.log(`Balance invoice ${squareBalanceInvoiceId} published successfully`);
-          } else {
-            console.warn(`Could not retrieve version for balance invoice ${squareBalanceInvoiceId}`);
+        if (!balancePublished) {
+          try {
+            const balanceInvoice = await getInvoiceById(squareBalanceInvoiceId);
+
+            if (balanceInvoice && balanceInvoice.version !== undefined) {
+              console.log(`Publishing balance invoice ${squareBalanceInvoiceId} (version ${balanceInvoice.version})`);
+              await publishInvoice(squareBalanceInvoiceId, balanceInvoice.version);
+              console.log(`Balance invoice ${squareBalanceInvoiceId} published successfully`);
+
+              // Mark as published to prevent re-publishing on webhook retry
+              await updateServiceRequest(recordId, {
+                balanceInvoicePublished: true,
+              });
+            } else {
+              console.warn(`Could not retrieve version for balance invoice ${squareBalanceInvoiceId}`);
+            }
+          } catch (error) {
+            console.error("Error publishing balance invoice:", error);
+            // Don't fail the entire webhook if balance invoice publication fails
           }
-        } catch (error) {
-          console.error("Error publishing balance invoice:", error);
-          // Don't fail the entire webhook if balance invoice publication fails
+        } else {
+          console.log(`Balance invoice ${squareBalanceInvoiceId} already published, skipping`);
         }
       }
 

@@ -55,6 +55,7 @@ interface UpdateServiceRequestParams {
   squareBalanceInvoiceId?: string;
   squareCustomerId?: string;
   webhookRequestId?: string;
+  balanceInvoicePublished?: boolean;
 }
 
 // Update service request with payment info
@@ -74,6 +75,8 @@ export async function updateServiceRequest(
       fields["Square Customer ID"] = updates.squareCustomerId;
     if (updates.webhookRequestId)
       fields["Webhook Request ID"] = updates.webhookRequestId;
+    if (updates.balanceInvoicePublished !== undefined)
+      fields["Balance Invoice Published"] = updates.balanceInvoicePublished;
 
     const record = await getServiceRequestsTable().update(recordId, fields);
     return record;
@@ -139,6 +142,94 @@ export async function storeInvoiceVersion(
       `Error storing ${invoiceType} invoice version:`,
       error
     );
+    throw error;
+  }
+}
+
+// Get confirmed bookings table
+export function getConfirmedBookingsTable() {
+  const tableId = process.env.NEXT_PUBLIC_CONFIRMED_BOOKINGS_TABLE_ID;
+  if (!tableId) {
+    throw new Error("Missing CONFIRMED_BOOKINGS_TABLE_ID");
+  }
+  return getAirtableBase().table(tableId);
+}
+
+// Check if bookings already exist for a service request
+export async function hasConfirmedBookings(serviceRequestId: string): Promise<boolean> {
+  try {
+    const records = await getConfirmedBookingsTable().select().all();
+
+    // Filter in code since linked record fields can't be queried with formula
+    return records.some((record) => {
+      const requestIds = record.fields["Request ID"];
+      if (Array.isArray(requestIds)) {
+        return requestIds.includes(serviceRequestId);
+      }
+      return requestIds === serviceRequestId;
+    });
+  } catch (error) {
+    console.error(`Error checking for existing bookings:`, error);
+    return false;
+  }
+}
+
+// Create confirmed booking records from service request
+export async function createConfirmedBookings(serviceRequest: any) {
+  try {
+    const fields = serviceRequest.fields as Record<string, any>;
+    const raw = fields["Preferred Date and Time"];
+
+    if (!raw) {
+      console.warn(`No preferred dates found for service request ${serviceRequest.id}`);
+      return;
+    }
+
+    // Check if bookings already exist (idempotency check for webhook retries)
+    if (await hasConfirmedBookings(serviceRequest.id)) {
+      console.log(`Bookings already exist for service request ${serviceRequest.id}, skipping creation`);
+      return;
+    }
+
+    // Parse the JSON date structure
+    let dates: string[] = [];
+    try {
+      const parsed = JSON.parse(raw);
+      dates = parsed.standardised_dates || [];
+    } catch {
+      console.error("Failed to parse Preferred Date and Time:", raw);
+      return;
+    }
+
+    if (dates.length === 0) {
+      console.warn(`No standardised dates found in ${raw}`);
+      return;
+    }
+
+    const duration = fields["Walk Duration"] || fields["Visit Duration"] || fields["Number of Nights"] || null;
+    const table = getConfirmedBookingsTable();
+
+    for (const entry of dates) {
+      // entry format: "26/05/2026 | Midday"
+      const [datePart, timePart] = entry.split(" | ").map((s: string) => s.trim());
+
+      // Convert DD/MM/YYYY to ISO for Airtable date field
+      const [day, month, year] = datePart.split("/");
+      const isoDate = `${year}-${month}-${day}`;
+
+      await table.create({
+        "Request ID": [serviceRequest.id],
+        "Client Name": fields["Client Name"] || "",
+        "Service Type": fields["Service Type"] || "",
+        "Date": isoDate,
+        "Time": timePart || "",
+        "Duration": duration ? String(duration) : "",
+      });
+    }
+
+    console.log(`Created ${dates.length} confirmed booking(s) for service request ${serviceRequest.id}`);
+  } catch (error) {
+    console.error("Error creating confirmed bookings:", error);
     throw error;
   }
 }
