@@ -14,6 +14,11 @@ function verifySquareWebhookSignature(
   signature: string | null,
   webhookUrl: string
 ): boolean {
+  console.log("Signature verification:");
+  console.log("- Key present:", !!process.env.SQUARE_WEBHOOK_SIGNATURE_KEY);
+  console.log("- Signature header present:", !!signature);
+  console.log("- Signature value:", signature?.substring(0, 10) + "...");
+
   if (!process.env.SQUARE_WEBHOOK_SIGNATURE_KEY || !signature) {
     console.warn("Webhook signature key or signature missing");
     return false;
@@ -23,6 +28,9 @@ function verifySquareWebhookSignature(
     .createHmac("sha256", process.env.SQUARE_WEBHOOK_SIGNATURE_KEY)
     .update(webhookUrl + body)
     .digest("base64");
+
+  console.log("- Computed hash:", hash.substring(0, 10) + "...");
+  console.log("- Match:", hash === signature);
 
   return hash === signature;
 }
