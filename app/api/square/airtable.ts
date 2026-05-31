@@ -88,7 +88,7 @@ export async function findServiceRequestByInvoiceId(invoiceId: string) {
   try {
     const records = await getServiceRequestsTable()
       .select({
-        filterByFormula: `OR({Square Deposit Invoice ID} = '${invoiceId}', {Square Balance Invoice ID} = '${invoiceId}')`,
+        filterByFormula: `OR({Square Deposit Invoice ID} = "${invoiceId}", {Square Balance Invoice ID} = "${invoiceId}")`,
       })
       .all();
 

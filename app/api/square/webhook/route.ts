@@ -5,7 +5,7 @@ import {
   updateServiceRequest,
   getServiceRequest,
 } from "../airtable";
-import { createBalanceInvoice, publishInvoice } from "../utils";
+import { publishInvoice, getInvoiceById } from "../utils";
 
 // Verify Square webhook signature
 function verifySquareWebhookSignature(
@@ -70,19 +70,17 @@ async function handleInvoicePaymentMade(invoiceId: string) {
       });
 
       // If balance invoice hasn't been published yet, publish it now
-      if (
-        squareBalanceInvoiceId &&
-        (!fields["Balance Invoice Published Date"] || !fields["Balance Invoice Published Date"])
-      ) {
+      if (squareBalanceInvoiceId) {
         try {
-          const balanceRecord = await getServiceRequest(recordId);
-          const balanceFields = balanceRecord.fields as Record<string, any>;
+          const balanceInvoice = await getInvoiceById(squareBalanceInvoiceId);
 
-          // Get current balance invoice to publish it
-          console.log(`Publishing balance invoice ${squareBalanceInvoiceId}`);
-          // Note: In a real scenario, we'd fetch the invoice version from Square first
-          // For now, we assume version 0 for a newly created invoice
-          // You might want to store the version when creating it
+          if (balanceInvoice && balanceInvoice.version !== undefined) {
+            console.log(`Publishing balance invoice ${squareBalanceInvoiceId} (version ${balanceInvoice.version})`);
+            await publishInvoice(squareBalanceInvoiceId, balanceInvoice.version);
+            console.log(`Balance invoice ${squareBalanceInvoiceId} published successfully`);
+          } else {
+            console.warn(`Could not retrieve version for balance invoice ${squareBalanceInvoiceId}`);
+          }
         } catch (error) {
           console.error("Error publishing balance invoice:", error);
           // Don't fail the entire webhook if balance invoice publication fails
@@ -100,9 +98,9 @@ async function handleInvoicePaymentMade(invoiceId: string) {
     if (invoiceId === squareBalanceInvoiceId) {
       console.log(`Balance paid for service request ${recordId}`);
 
-      // Update status to "Balance Paid" or "Completed"
+      // Update status to "Full Paid"
       await updateServiceRequest(recordId, {
-        status: "Completed",
+        status: "Full Paid",
       });
 
       return {
@@ -125,8 +123,13 @@ async function handleInvoicePaymentMade(invoiceId: string) {
 export async function POST(request: NextRequest) {
   try {
     const rawBody = await request.text();
-    const signature = request.headers.get("x-square-hmac-sha256");
-    const webhookUrl = request.url;
+    const signature = request.headers.get("x-square-hmacsha256-signature");
+
+    // Reconstruct the webhook URL using the host header (for ngrok compatibility)
+    const host = request.headers.get("host") || "localhost:3000";
+    const proto = request.headers.get("x-forwarded-proto") || "https";
+    const pathname = new URL(request.url).pathname + new URL(request.url).search;
+    const webhookUrl = `${proto}://${host}${pathname}`;
 
     // Verify signature
     if (!verifySquareWebhookSignature(rawBody, signature, webhookUrl)) {

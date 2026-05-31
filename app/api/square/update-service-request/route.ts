@@ -6,6 +6,7 @@ import {
   createBalanceInvoice,
   publishInvoice,
 } from "../utils";
+import { getAirtableBase } from "../airtable";
 
 interface ServiceRequestFields {
   [key: string]: any;
@@ -13,18 +14,6 @@ interface ServiceRequestFields {
   "Email": string;
   "Deposit Amount": number;
   Description?: string;
-}
-
-async function getAirtableBase() {
-  const apiKey = process.env.AIRTABLE_API_KEY;
-  const baseId = process.env.NEXT_PUBLIC_BASE_ID;
-
-  if (!apiKey || !baseId) {
-    throw new Error("Missing Airtable credentials");
-  }
-
-  const airtable = new Airtable({ apiKey });
-  return airtable.base(baseId);
 }
 
 async function getServiceRequest(recordId: string) {
@@ -85,8 +74,6 @@ export async function POST(request: NextRequest) {
 
       if (!clientName || !clientEmail) {
         console.error("Missing required fields for invoice creation");
-        console.error("Client Name present?", !!clientName);
-        console.error("Email present?", !!clientEmail);
         return NextResponse.json(
           {
             error: "Missing Client Name or Email in service request",

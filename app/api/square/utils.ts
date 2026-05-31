@@ -273,6 +273,17 @@ export async function publishInvoice(invoiceId: string, version: number) {
   }
 }
 
+// Get invoice by ID (to retrieve current version)
+export async function getInvoiceById(invoiceId: string) {
+  try {
+    const invoiceResponse = await makeSquareRequest("GET", `/invoices/${invoiceId}`);
+    return invoiceResponse.invoice;
+  } catch (error) {
+    console.error(`Error fetching invoice ${invoiceId}:`, error);
+    throw error;
+  }
+}
+
 // Verify Square webhook signature
 export function verifySquareWebhookSignature(
   body: string,
