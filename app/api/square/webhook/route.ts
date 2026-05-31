@@ -146,11 +146,16 @@ export async function POST(request: NextRequest) {
     const rawBody = await request.text();
     const signature = request.headers.get("x-square-hmacsha256-signature");
 
-    // Reconstruct the webhook URL using the host header (for ngrok compatibility)
-    const host = request.headers.get("host") || "localhost:3000";
-    const proto = request.headers.get("x-forwarded-proto") || "https";
-    const pathname = new URL(request.url).pathname + new URL(request.url).search;
-    const webhookUrl = `${proto}://${host}${pathname}`;
+    // Reconstruct the webhook URL - on Vercel request.url is already absolute
+    let webhookUrl = request.url;
+    if (!webhookUrl.startsWith("http")) {
+      const host = request.headers.get("host") || "localhost:3000";
+      const proto = request.headers.get("x-forwarded-proto") || "https";
+      const pathname = new URL(request.url).pathname + new URL(request.url).search;
+      webhookUrl = `${proto}://${host}${pathname}`;
+    }
+
+    console.log(`Webhook URL for signature: ${webhookUrl}`);
 
     // Verify signature
     if (!verifySquareWebhookSignature(rawBody, signature, webhookUrl)) {
