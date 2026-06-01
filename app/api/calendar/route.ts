@@ -58,7 +58,7 @@ async function getPetsForClient(base: any, clientId: string): Promise<string[]> 
       .all();
 
     return records
-      .map((r) => r.fields["Pet Name"] as string)
+      .map((r: any) => r.fields["Pet Name"] as string)
       .filter(Boolean);
   } catch (error) {
     console.error(`Error fetching pets for client ${clientId}:`, error);
