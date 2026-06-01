@@ -130,12 +130,12 @@ export async function POST(request: NextRequest) {
         }
 
         // Publish invoice
-        await publishInvoice(invoice.id, invoice.version);
+        const publishedInvoice = await publishInvoice(invoice.id, invoice.version);
 
         // Update service request with new status and invoice ID
         const updatedRecord = await updateServiceRequestStatus(recordId, newStatus, {
           "Square Customer ID": customer.id,
-          "Square Invoice ID": invoice.id,
+          "Square Invoice ID": publishedInvoice.id,
         });
 
         return NextResponse.json({
@@ -145,7 +145,7 @@ export async function POST(request: NextRequest) {
           previousStatus: currentStatus,
           newStatus,
           invoice: {
-            id: invoice.id,
+            id: publishedInvoice.id,
             depositAmount,
             balanceAmount: balanceAmount || 0,
             totalAmount: depositAmount + (balanceAmount || 0),

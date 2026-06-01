@@ -1,4 +1,5 @@
 import Airtable from "airtable";
+import { parsePreferredDates } from "./utils";
 
 // Initialize Airtable
 export function getAirtableBase() {
@@ -180,42 +181,28 @@ export async function createConfirmedBookings(serviceRequest: any) {
     }
 
     // Parse the JSON date structure
-    let dates: string[] = [];
-    try {
-      const parsed = JSON.parse(raw);
-      dates = parsed.standardised_dates || [];
-      console.log(`Parsed ${dates.length} dates from Preferred Date and Time`);
-    } catch (parseError) {
-      console.error("Failed to parse Preferred Date and Time:", raw);
-      console.error("Parse error:", parseError);
-      return;
-    }
+    const parsedDates = parsePreferredDates(raw);
 
-    if (dates.length === 0) {
+    if (parsedDates.length === 0) {
       console.warn(`No standardised dates found. Raw value: ${raw}`);
       return;
     }
 
+    console.log(`Parsed ${parsedDates.length} dates from Preferred Date and Time`);
+
     const duration = fields["Walk Duration"] || fields["Visit Duration"] || fields["Number of Nights"] || null;
     const table = getConfirmedBookingsTable();
+    const serviceType = fields["Service Type"] || "";
 
-    for (const entry of dates) {
-      // entry format: "26/05/2026 | Midday"
-      const [datePart, timePart] = entry.split(" | ").map((s: string) => s.trim());
+    console.log(`Service Type: "${serviceType}"`);
 
-      // Convert DD/MM/YYYY to ISO for Airtable date field
-      const [day, month, year] = datePart.split("/");
-      const isoDate = `${year}-${month}-${day}`;
-
-      const serviceType = fields["Service Type"] || "";
-      console.log(`Service Type: "${serviceType}"`);
-
+    for (const parsed of parsedDates) {
       const bookingFields: Record<string, any> = {
         "Request ID": [serviceRequest.id],
         "Client Name": fields["Client Name"] || "",
         "Service Type": serviceType,
-        "Date": isoDate,
-        "Time": timePart || "",
+        "Date": parsed.isoDate,
+        "Time": parsed.timePart,
       };
 
       // Only populate duration for dog walking and drop-in visits, not pet sitting
@@ -229,7 +216,7 @@ export async function createConfirmedBookings(serviceRequest: any) {
       await table.create(bookingFields);
     }
 
-    console.log(`Created ${dates.length} confirmed booking(s) for service request ${serviceRequest.id}`);
+    console.log(`Created ${parsedDates.length} confirmed booking(s) for service request ${serviceRequest.id}`);
   } catch (error) {
     console.error("Error creating confirmed bookings:", error);
     throw error;

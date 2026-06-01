@@ -1,5 +1,48 @@
 import crypto from "crypto";
 
+// Parse preferred dates from Airtable format
+export interface ParsedDateEntry {
+  originalEntry: string; // "26/05/2026 | Midday"
+  datePart: string; // "26/05/2026"
+  timePart: string; // "Midday"
+  isoDate: string; // "2026-05-26"
+  day: string;
+  month: string;
+  year: string;
+}
+
+export function parsePreferredDates(preferredDatesJson: string): ParsedDateEntry[] {
+  try {
+    const dateData = JSON.parse(preferredDatesJson);
+    const dates: string[] = dateData.standardised_dates || [];
+
+    return dates.map(entry => {
+      const [datePart, timePart] = entry.split(" | ").map((s: string) => s.trim());
+      const [day, month, year] = datePart.split("/");
+      const isoDate = `${year}-${month}-${day}`;
+
+      return {
+        originalEntry: entry,
+        datePart,
+        timePart: timePart || "",
+        isoDate,
+        day,
+        month,
+        year,
+      };
+    });
+  } catch (error) {
+    console.error("Error parsing preferred dates:", error);
+    return [];
+  }
+}
+
+// Get first booking date as ISO string
+export function getFirstBookingDate(preferredDatesJson: string): string | null {
+  const parsed = parsePreferredDates(preferredDatesJson);
+  return parsed.length > 0 ? parsed[0].isoDate : null;
+}
+
 // Make raw HTTP request to Square API
 async function makeSquareRequest(
   method: string,
@@ -111,8 +154,6 @@ interface CreateInvoiceParams {
   balanceAmount: number;
   description: string;
   serviceRequestId: string;
-  depositDueDays?: number;
-  balanceDueDays?: number;
   serviceRequestData?: {
     preferredDates?: string; // JSON string with standardised_dates
     pricePerUnit?: number;
@@ -130,33 +171,60 @@ export async function createInvoice(params: CreateInvoiceParams) {
   }
 
   try {
-    const depositDueDays = params.depositDueDays || 7;
-    const balanceDueDays = params.balanceDueDays || 30;
-
     // Build line items from service request data
     const lineItems: Array<{ name: string; amount: number }> = [];
 
-    if (params.serviceRequestData?.preferredDates && params.serviceRequestData?.pricePerUnit) {
-      try {
-        const dateData = JSON.parse(params.serviceRequestData.preferredDates);
-        const dates: string[] = dateData.standardised_dates || [];
-        const pricePerUnit = params.serviceRequestData.pricePerUnit;
-        const serviceType = params.serviceRequestData.serviceType || "Service";
+    // Calculate deposit and balance due dates
+    let depositDueDate: string;
+    let balanceDueDate: string;
 
+    // Deposit is due immediately
+    depositDueDate = new Date().toISOString().split("T")[0];
+
+    // Balance due date is calculated from first booking date
+    if (params.serviceRequestData?.preferredDates && params.serviceRequestData?.serviceType) {
+      const parsedDates = parsePreferredDates(params.serviceRequestData.preferredDates);
+
+      if (parsedDates.length > 0) {
+        const firstBookingDate = new Date(parsedDates[0].isoDate);
+
+        // Determine days before booking based on service type
+        const serviceType = params.serviceRequestData.serviceType;
+        const daysBeforeBooking = serviceType.includes("Pet Sitting") ? 10 : 5;
+
+        // Calculate balance due date (X days before first booking)
+        const balanceDueDateObj = new Date(firstBookingDate);
+        balanceDueDateObj.setDate(balanceDueDateObj.getDate() - daysBeforeBooking);
+        balanceDueDate = balanceDueDateObj.toISOString().split("T")[0];
+
+        console.log(`First booking: ${parsedDates[0].datePart}, Balance due: ${daysBeforeBooking} days before`);
+      } else {
+        // Fallback to default
+        const balanceDueDateObj = new Date();
+        balanceDueDateObj.setDate(balanceDueDateObj.getDate() + 30);
+        balanceDueDate = balanceDueDateObj.toISOString().split("T")[0];
+      }
+    } else {
+      // Fallback if no service data
+      const balanceDueDateObj = new Date();
+      balanceDueDateObj.setDate(balanceDueDateObj.getDate() + 30);
+      balanceDueDate = balanceDueDateObj.toISOString().split("T")[0];
+    }
+
+    if (params.serviceRequestData?.preferredDates && params.serviceRequestData?.pricePerUnit) {
+      const parsedDates = parsePreferredDates(params.serviceRequestData.preferredDates);
+      const pricePerUnit = params.serviceRequestData.pricePerUnit;
+      const serviceType = params.serviceRequestData.serviceType || "Service";
+
+      if (parsedDates.length > 0) {
         // Create a line item for each date
-        for (const entry of dates) {
-          const datePart = entry.split(" | ")[0]?.trim();
-          if (datePart) {
-            const [day, month, year] = datePart.split("/");
-            const formattedDate = `${day}/${month}/${year}`;
-            lineItems.push({
-              name: `${serviceType} - ${formattedDate}`,
-              amount: pricePerUnit,
-            });
-          }
+        for (const parsed of parsedDates) {
+          lineItems.push({
+            name: `${serviceType} - ${parsed.datePart}`,
+            amount: pricePerUnit,
+          });
         }
-      } catch (error) {
-        console.error("Error parsing dates for line items:", error);
+      } else {
         // Fallback to simple line item if date parsing fails
         lineItems.push({
           name: params.description,
@@ -187,13 +255,6 @@ export async function createInvoice(params: CreateInvoiceParams) {
       params.customerId,
       lineItems
     );
-
-    const depositDueDate = new Date(Date.now() + depositDueDays * 24 * 60 * 60 * 1000)
-      .toISOString()
-      .split("T")[0];
-    const balanceDueDate = new Date(Date.now() + balanceDueDays * 24 * 60 * 60 * 1000)
-      .toISOString()
-      .split("T")[0];
 
     // Create single invoice with deposit and balance payment requests
     const invoiceResponse = await makeSquareRequest("POST", "/invoices", {

@@ -88,16 +88,16 @@ async function processServiceRequest(recordId: string) {
     }
 
     // Publish invoice
-    await publishInvoice(invoice.id, invoice.version);
+    const publishedInvoice = await publishInvoice(invoice.id, invoice.version);
 
     // Update Airtable with invoice information
     await updateServiceRequest(recordId, {
       squareCustomerId: customer.id,
-      squareInvoiceId: invoice.id,
+      squareInvoiceId: publishedInvoice.id,
     });
 
     console.log(
-      `Successfully created invoice for ${clientName}: ${invoice.id}`
+      `Successfully created invoice for ${clientName}: ${publishedInvoice.id}`
     );
 
     return {
@@ -105,7 +105,7 @@ async function processServiceRequest(recordId: string) {
       message: "Invoice created and published",
       recordId,
       customerId: customer.id,
-      invoiceId: invoice.id,
+      invoiceId: publishedInvoice.id,
     };
   } catch (error) {
     console.error(`Error processing service request ${recordId}:`, error);
