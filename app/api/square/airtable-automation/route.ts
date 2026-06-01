@@ -1,8 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import {
   createOrGetSquareCustomer,
-  createDepositInvoice,
-  createBalanceInvoice,
+  createInvoice,
   publishInvoice,
 } from "../utils";
 import {
@@ -67,56 +66,40 @@ async function processServiceRequest(recordId: string) {
       throw new Error("Failed to get/create Square customer");
     }
 
-    // Create deposit invoice
-    const depositInvoice = await createDepositInvoice({
+    // Create single invoice with deposit and balance payment requests
+    const invoice = await createInvoice({
       customerId: customer.id,
       customerEmail: clientEmail,
       clientName,
       depositAmount,
-      description,
-      serviceRequestId: recordId,
-    });
-
-    if (!depositInvoice.id || depositInvoice.version === undefined) {
-      throw new Error("Failed to create deposit invoice");
-    }
-
-    // Publish deposit invoice
-    await publishInvoice(depositInvoice.id, depositInvoice.version);
-
-    // Create balance invoice (will be published later after deposit is paid)
-    const balanceInvoice = await createBalanceInvoice({
-      customerId: customer.id,
-      customerEmail: clientEmail,
-      clientName,
       balanceAmount: balanceAmount || 0,
       description,
       serviceRequestId: recordId,
-      daysUntilDue: 30,
     });
 
-    if (!balanceInvoice.id) {
-      throw new Error("Failed to create balance invoice");
+    if (!invoice.id || invoice.version === undefined) {
+      throw new Error("Failed to create invoice");
     }
+
+    // Publish invoice
+    await publishInvoice(invoice.id, invoice.version);
 
     // Update Airtable with invoice information
     await updateServiceRequest(recordId, {
       squareCustomerId: customer.id,
-      squareDepositInvoiceId: depositInvoice.id,
-      squareBalanceInvoiceId: balanceInvoice.id,
+      squareInvoiceId: invoice.id,
     });
 
     console.log(
-      `Successfully created invoices for ${clientName}: Deposit ${depositInvoice.id}, Balance ${balanceInvoice.id}`
+      `Successfully created invoice for ${clientName}: ${invoice.id}`
     );
 
     return {
       status: "success",
-      message: "Invoices created and published",
+      message: "Invoice created and published",
       recordId,
       customerId: customer.id,
-      depositInvoiceId: depositInvoice.id,
-      balanceInvoiceId: balanceInvoice.id,
+      invoiceId: invoice.id,
     };
   } catch (error) {
     console.error(`Error processing service request ${recordId}:`, error);

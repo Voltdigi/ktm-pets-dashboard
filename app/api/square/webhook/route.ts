@@ -63,14 +63,26 @@ async function handleInvoicePaymentMade(invoiceId: string) {
     }
 
     const recordId = serviceRequest.id;
-    const fields = serviceRequest.fields as Record<string, any>;
-    const squareDepositInvoiceId = fields["Square Deposit Invoice ID"];
-    const squareBalanceInvoiceId = fields["Square Balance Invoice ID"];
-    const squareCustomerId = fields["Square Customer ID"];
-    const clientEmail = fields["Client Email"];
 
-    // Check if this is the deposit invoice
-    if (invoiceId === squareDepositInvoiceId) {
+    // Fetch the invoice to check which payment request was paid
+    const invoice = await getInvoiceById(invoiceId);
+    if (!invoice) {
+      console.warn(`Could not fetch invoice ${invoiceId}`);
+      return { status: "skipped", message: "Could not fetch invoice" };
+    }
+
+    console.log(`Invoice has ${invoice.payment_requests?.length || 0} payment requests`);
+
+    // Check the payment requests to determine which was just paid
+    const paymentRequests = invoice.payment_requests || [];
+    const depositRequest = paymentRequests.find((r: any) => r.request_type === "DEPOSIT");
+    const balanceRequest = paymentRequests.find((r: any) => r.request_type === "BALANCE");
+
+    console.log(`Deposit request state: ${depositRequest?.state}`);
+    console.log(`Balance request state: ${balanceRequest?.state}`);
+
+    // If deposit is complete and balance is not, deposit was just paid
+    if (depositRequest?.state === "COMPLETED" && balanceRequest?.state !== "COMPLETED") {
       console.log(`Deposit paid for service request ${recordId}`);
 
       // Update status to "Deposit Paid"
@@ -87,38 +99,6 @@ async function handleInvoicePaymentMade(invoiceId: string) {
         // Don't fail the entire webhook if booking creation fails
       }
 
-      // If balance invoice hasn't been published yet, publish it now
-      if (squareBalanceInvoiceId) {
-        const balancePublished = fields["Balance Invoice Published"];
-        console.log(`Balance Invoice Published flag: ${balancePublished}`);
-
-        if (!balancePublished) {
-          try {
-            const balanceInvoice = await getInvoiceById(squareBalanceInvoiceId);
-
-            if (balanceInvoice && balanceInvoice.version !== undefined) {
-              console.log(`Publishing balance invoice ${squareBalanceInvoiceId} (version ${balanceInvoice.version})`);
-              await publishInvoice(squareBalanceInvoiceId, balanceInvoice.version);
-              console.log(`Balance invoice ${squareBalanceInvoiceId} published successfully`);
-
-              // Mark as published to prevent re-publishing on webhook retry
-              console.log(`Setting Balance Invoice Published flag to true`);
-              await updateServiceRequest(recordId, {
-                balanceInvoicePublished: true,
-              });
-              console.log(`Flag updated successfully`);
-            } else {
-              console.warn(`Could not retrieve version for balance invoice ${squareBalanceInvoiceId}`);
-            }
-          } catch (error) {
-            console.error("Error publishing balance invoice:", error);
-            // Don't fail the entire webhook if balance invoice publication fails
-          }
-        } else {
-          console.log(`Balance invoice ${squareBalanceInvoiceId} already published, skipping`);
-        }
-      }
-
       return {
         status: "success",
         message: "Deposit payment recorded and status updated",
@@ -126,8 +106,8 @@ async function handleInvoicePaymentMade(invoiceId: string) {
       };
     }
 
-    // Check if this is the balance invoice
-    if (invoiceId === squareBalanceInvoiceId) {
+    // If both deposit and balance are complete, balance was just paid
+    if (depositRequest?.state === "COMPLETED" && balanceRequest?.state === "COMPLETED") {
       console.log(`Balance paid for service request ${recordId}`);
 
       // Update status to "Full Paid"
@@ -144,7 +124,7 @@ async function handleInvoicePaymentMade(invoiceId: string) {
 
     return {
       status: "skipped",
-      message: "Invoice type not recognized",
+      message: "No relevant payment state detected",
     };
   } catch (error) {
     console.error("Error handling invoice payment:", error);

@@ -106,19 +106,20 @@ async function createOrderForInvoice(
   return orderResponse.order;
 }
 
-interface CreateDepositInvoiceParams {
+interface CreateInvoiceParams {
   customerId: string;
   customerEmail: string;
   clientName: string;
   depositAmount: number;
+  balanceAmount: number;
   description: string;
   serviceRequestId: string;
+  depositDueDays?: number;
+  balanceDueDays?: number;
 }
 
-// Create deposit invoice
-export async function createDepositInvoice(
-  params: CreateDepositInvoiceParams
-) {
+// Create invoice with deposit and balance payment requests
+export async function createInvoice(params: CreateInvoiceParams) {
   const locationId = process.env.SQUARE_LOCATION_ID;
 
   if (!locationId) {
@@ -126,16 +127,26 @@ export async function createDepositInvoice(
   }
 
   try {
-    // Create order first
+    const depositDueDays = params.depositDueDays || 7;
+    const balanceDueDays = params.balanceDueDays || 30;
+    const totalAmount = params.depositAmount + params.balanceAmount;
+
+    // Create single order with total amount
     const order = await createOrderForInvoice(
       locationId,
       params.customerId,
-      params.depositAmount,
-      `Deposit - ${params.description}`
+      totalAmount,
+      params.description
     );
 
+    const depositDueDate = new Date(Date.now() + depositDueDays * 24 * 60 * 60 * 1000)
+      .toISOString()
+      .split("T")[0];
+    const balanceDueDate = new Date(Date.now() + balanceDueDays * 24 * 60 * 60 * 1000)
+      .toISOString()
+      .split("T")[0];
 
-    // Create invoice for the order
+    // Create single invoice with deposit and balance payment requests
     const invoiceResponse = await makeSquareRequest("POST", "/invoices", {
       invoice: {
         location_id: locationId,
@@ -145,10 +156,17 @@ export async function createDepositInvoice(
         },
         payment_requests: [
           {
+            request_type: "DEPOSIT",
+            fixed_amount_requested_money: {
+              amount: Math.round(params.depositAmount * 100),
+              currency: "GBP",
+            },
+            due_date: depositDueDate,
+            tipping_enabled: false,
+          },
+          {
             request_type: "BALANCE",
-            due_date: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000)
-              .toISOString()
-              .split("T")[0],
+            due_date: balanceDueDate,
             tipping_enabled: false,
           }
         ],
@@ -156,8 +174,8 @@ export async function createDepositInvoice(
           card: true,
         },
         delivery_method: "EMAIL",
-        invoice_number: `DEP-${params.serviceRequestId}-${Date.now()}`,
-        title: `Deposit - ${params.description}`,
+        invoice_number: `INV-${params.serviceRequestId}-${Date.now()}`,
+        title: params.description,
       }
     });
 
@@ -165,83 +183,10 @@ export async function createDepositInvoice(
       throw new Error("Failed to create invoice");
     }
 
-    console.log(`Created deposit invoice: ${invoiceResponse.invoice.id}`);
+    console.log(`Created invoice with deposit and balance: ${invoiceResponse.invoice.id}`);
     return invoiceResponse.invoice;
   } catch (error) {
-    console.error("Error creating deposit invoice:", error);
-    throw error;
-  }
-}
-
-interface CreateBalanceInvoiceParams {
-  customerId: string;
-  customerEmail: string;
-  clientName: string;
-  balanceAmount: number;
-  description: string;
-  serviceRequestId: string;
-  daysUntilDue?: number;
-}
-
-// Create balance invoice
-export async function createBalanceInvoice(
-  params: CreateBalanceInvoiceParams
-) {
-  const locationId = process.env.SQUARE_LOCATION_ID;
-
-  if (!locationId) {
-    throw new Error("Missing SQUARE_LOCATION_ID");
-  }
-
-  try {
-    const daysUntilDue = params.daysUntilDue || 30;
-
-    // Create order first
-    const order = await createOrderForInvoice(
-      locationId,
-      params.customerId,
-      params.balanceAmount,
-      `Balance - ${params.description}`
-    );
-
-    console.log(`Created balance order: ${order.id}`);
-
-    // Create invoice for the order
-    const invoiceResponse = await makeSquareRequest("POST", "/invoices", {
-      invoice: {
-        location_id: locationId,
-        order_id: order.id,
-        primary_recipient: {
-          customer_id: params.customerId,
-        },
-        payment_requests: [
-          {
-            request_type: "BALANCE",
-            due_date: new Date(Date.now() + daysUntilDue * 24 * 60 * 60 * 1000)
-              .toISOString()
-              .split("T")[0],
-            tipping_enabled: false,
-          }
-        ],
-        accepted_payment_methods: {
-          card: true,
-        },
-        delivery_method: "EMAIL",
-        invoice_number: `BAL-${params.serviceRequestId}-${Date.now()}`,
-        title: `Balance - ${params.description}`,
-      }
-    });
-
-    if (!invoiceResponse.invoice) {
-      throw new Error("Failed to create balance invoice");
-    }
-
-    console.log(
-      `Created balance invoice: ${invoiceResponse.invoice.id}`
-    );
-    return invoiceResponse.invoice;
-  } catch (error) {
-    console.error("Error creating balance invoice:", error);
+    console.error("Error creating invoice:", error);
     throw error;
   }
 }

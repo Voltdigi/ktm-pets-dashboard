@@ -51,11 +51,8 @@ export async function getPendingPaymentRequests() {
 
 interface UpdateServiceRequestParams {
   status?: string;
-  squareDepositInvoiceId?: string;
-  squareBalanceInvoiceId?: string;
+  squareInvoiceId?: string;
   squareCustomerId?: string;
-  webhookRequestId?: string;
-  balanceInvoicePublished?: boolean;
 }
 
 // Update service request with payment info
@@ -67,16 +64,10 @@ export async function updateServiceRequest(
     const fields: Record<string, any> = {};
 
     if (updates.status) fields["Status"] = updates.status;
-    if (updates.squareDepositInvoiceId)
-      fields["Square Deposit Invoice ID"] = updates.squareDepositInvoiceId;
-    if (updates.squareBalanceInvoiceId)
-      fields["Square Balance Invoice ID"] = updates.squareBalanceInvoiceId;
+    if (updates.squareInvoiceId)
+      fields["Square Invoice ID"] = updates.squareInvoiceId;
     if (updates.squareCustomerId)
       fields["Square Customer ID"] = updates.squareCustomerId;
-    if (updates.webhookRequestId)
-      fields["Webhook Request ID"] = updates.webhookRequestId;
-    if (updates.balanceInvoicePublished !== undefined)
-      fields["Balance Invoice Published"] = updates.balanceInvoicePublished;
 
     const record = await getServiceRequestsTable().update(recordId, fields);
     return record;
@@ -91,7 +82,7 @@ export async function findServiceRequestByInvoiceId(invoiceId: string) {
   try {
     const records = await getServiceRequestsTable()
       .select({
-        filterByFormula: `OR({Square Deposit Invoice ID} = "${invoiceId}", {Square Balance Invoice ID} = "${invoiceId}")`,
+        filterByFormula: `{Square Invoice ID} = "${invoiceId}"`,
       })
       .all();
 
@@ -102,16 +93,13 @@ export async function findServiceRequestByInvoiceId(invoiceId: string) {
   }
 }
 
-// Check if invoices already created for a service request (idempotency)
+// Check if invoice already created for a service request (idempotency)
 export async function hasInvoicesCreated(recordId: string): Promise<boolean> {
   try {
     const record = await getServiceRequest(recordId);
-    const depositInvoiceId =
-      record.fields["Square Deposit Invoice ID"];
-    const balanceInvoiceId =
-      record.fields["Square Balance Invoice ID"];
+    const invoiceId = record.fields["Square Invoice ID"];
 
-    return !!(depositInvoiceId || balanceInvoiceId);
+    return !!invoiceId;
   } catch (error) {
     console.error(
       `Error checking invoice status for ${recordId}:`,

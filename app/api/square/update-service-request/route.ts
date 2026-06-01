@@ -2,8 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import Airtable from "airtable";
 import {
   createOrGetSquareCustomer,
-  createDepositInvoice,
-  createBalanceInvoice,
+  createInvoice,
   publishInvoice,
 } from "../utils";
 import { getAirtableBase } from "../airtable";
@@ -109,60 +108,41 @@ export async function POST(request: NextRequest) {
           throw new Error("Failed to get/create Square customer");
         }
 
-        // Create deposit invoice
-        const depositInvoice = await createDepositInvoice({
+        // Create single invoice with deposit and balance payment requests
+        const invoice = await createInvoice({
           customerId: customer.id,
           customerEmail: clientEmail,
           clientName,
           depositAmount,
-          description,
-          serviceRequestId: recordId,
-        });
-
-        if (!depositInvoice.id || depositInvoice.version === undefined) {
-          throw new Error("Failed to create deposit invoice");
-        }
-
-        // Publish deposit invoice
-        await publishInvoice(depositInvoice.id, depositInvoice.version);
-
-        // Create balance invoice
-        const balanceInvoice = await createBalanceInvoice({
-          customerId: customer.id,
-          customerEmail: clientEmail,
-          clientName,
           balanceAmount: balanceAmount || 0,
           description,
           serviceRequestId: recordId,
-          daysUntilDue: 30,
         });
 
-        if (!balanceInvoice.id) {
-          throw new Error("Failed to create balance invoice");
+        if (!invoice.id || invoice.version === undefined) {
+          throw new Error("Failed to create invoice");
         }
 
-        // Update service request with new status and invoice IDs
+        // Publish invoice
+        await publishInvoice(invoice.id, invoice.version);
+
+        // Update service request with new status and invoice ID
         const updatedRecord = await updateServiceRequestStatus(recordId, newStatus, {
           "Square Customer ID": customer.id,
-          "Square Deposit Invoice ID": depositInvoice.id,
-          "Square Balance Invoice ID": balanceInvoice.id,
+          "Square Invoice ID": invoice.id,
         });
 
         return NextResponse.json({
           success: true,
-          message: "Status updated and invoices created",
+          message: "Status updated and invoice created",
           recordId,
           previousStatus: currentStatus,
           newStatus,
-          invoices: {
-            deposit: {
-              id: depositInvoice.id,
-              amount: depositAmount,
-            },
-            balance: {
-              id: balanceInvoice.id,
-              amount: balanceAmount || 0,
-            },
+          invoice: {
+            id: invoice.id,
+            depositAmount,
+            balanceAmount: balanceAmount || 0,
+            totalAmount: depositAmount + (balanceAmount || 0),
           },
           customer: {
             id: customer.id,
