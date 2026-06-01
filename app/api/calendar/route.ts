@@ -50,12 +50,17 @@ async function getPetsForClient(base: any, clientId: string): Promise<string[]> 
     const tableId = process.env.NEXT_PUBLIC_PETS_TABLE_ID;
     if (!tableId) return [];
 
-    const records = await base
-      .table(tableId)
-      .select({
-        filterByFormula: `{Client ID} = "${clientId}"`,
-      })
-      .all();
+    // Get all pets and filter in code (linked records don't work well with formula filters)
+    const allPets = await base.table(tableId).select().all();
+
+    // Filter pets by client ID
+    const records = allPets.filter((pet: any) => {
+      const petClientIds = pet.fields["Client"];
+      if (Array.isArray(petClientIds)) {
+        return petClientIds.includes(clientId);
+      }
+      return petClientIds === clientId;
+    });
 
     return records
       .map((r: any) => r.fields["Pet Name"] as string)
@@ -134,6 +139,7 @@ export async function GET(request: NextRequest) {
       if (!serviceRequest) continue;
 
       const srFields = serviceRequest.fields as Record<string, any>;
+
       const clientName = srFields["Client Name"] || "Unknown Client";
       const clientEmail = srFields["Email"] || "";
       const clientPhone = srFields["Phone Number"] || "";
@@ -141,7 +147,10 @@ export async function GET(request: NextRequest) {
       const duration = fields["Duration"] || "";
       const date = fields["Date"] as string;
       const time = fields["Time"] || "";
-      const clientId = srFields["Client ID"];
+
+      // TEST_CLIENTS is a linked record field, returns array of IDs
+      const testClientsLinked = srFields["TEST_CLIENTS"];
+      const clientId = Array.isArray(testClientsLinked) ? testClientsLinked[0] : testClientsLinked;
 
       // Get pets for this client
       const pets = clientId ? await getPetsForClient(base, clientId) : [];
@@ -154,7 +163,9 @@ export async function GET(request: NextRequest) {
       const uid = `${booking.id}-${clientId}@ktmpets.com`;
 
       // Format summary
-      const summary = `${serviceType} - ${petNames} (${duration})`;
+      const summary = duration
+        ? `${serviceType} - ${petNames} (${duration})`
+        : `${serviceType} - ${petNames}`;
 
       // Format description with all details
       const description = `Client: ${clientName}
