@@ -90,6 +90,7 @@ async function handleInvoicePaymentMade(invoiceId: string) {
       // If balance invoice hasn't been published yet, publish it now
       if (squareBalanceInvoiceId) {
         const balancePublished = fields["Balance Invoice Published"];
+        console.log(`Balance Invoice Published flag: ${balancePublished}`);
 
         if (!balancePublished) {
           try {
@@ -101,9 +102,11 @@ async function handleInvoicePaymentMade(invoiceId: string) {
               console.log(`Balance invoice ${squareBalanceInvoiceId} published successfully`);
 
               // Mark as published to prevent re-publishing on webhook retry
+              console.log(`Setting Balance Invoice Published flag to true`);
               await updateServiceRequest(recordId, {
                 balanceInvoicePublished: true,
               });
+              console.log(`Flag updated successfully`);
             } else {
               console.warn(`Could not retrieve version for balance invoice ${squareBalanceInvoiceId}`);
             }
@@ -154,14 +157,12 @@ export async function POST(request: NextRequest) {
     const rawBody = await request.text();
     const signature = request.headers.get("x-square-hmacsha256-signature");
 
-    // Reconstruct the webhook URL - on Vercel request.url is already absolute
-    let webhookUrl = request.url;
-    if (!webhookUrl.startsWith("http")) {
-      const host = request.headers.get("host") || "localhost:3000";
-      const proto = request.headers.get("x-forwarded-proto") || "https";
-      const pathname = new URL(request.url).pathname + new URL(request.url).search;
-      webhookUrl = `${proto}://${host}${pathname}`;
-    }
+    // Reconstruct the webhook URL using host header (works for ngrok and Vercel)
+    const host = request.headers.get("host") || "localhost:3000";
+    const proto = request.headers.get("x-forwarded-proto") || "https";
+    const url = new URL(request.url);
+    const pathname = url.pathname + url.search;
+    const webhookUrl = `${proto}://${host}${pathname}`;
 
     console.log(`Webhook URL for signature: ${webhookUrl}`);
 

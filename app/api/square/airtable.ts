@@ -196,13 +196,15 @@ export async function createConfirmedBookings(serviceRequest: any) {
     try {
       const parsed = JSON.parse(raw);
       dates = parsed.standardised_dates || [];
-    } catch {
+      console.log(`Parsed ${dates.length} dates from Preferred Date and Time`);
+    } catch (parseError) {
       console.error("Failed to parse Preferred Date and Time:", raw);
+      console.error("Parse error:", parseError);
       return;
     }
 
     if (dates.length === 0) {
-      console.warn(`No standardised dates found in ${raw}`);
+      console.warn(`No standardised dates found. Raw value: ${raw}`);
       return;
     }
 
@@ -217,14 +219,26 @@ export async function createConfirmedBookings(serviceRequest: any) {
       const [day, month, year] = datePart.split("/");
       const isoDate = `${year}-${month}-${day}`;
 
-      await table.create({
+      const serviceType = fields["Service Type"] || "";
+      console.log(`Service Type: "${serviceType}"`);
+
+      const bookingFields: Record<string, any> = {
         "Request ID": [serviceRequest.id],
         "Client Name": fields["Client Name"] || "",
-        "Service Type": fields["Service Type"] || "",
+        "Service Type": serviceType,
         "Date": isoDate,
         "Time": timePart || "",
-        "Duration": duration ? String(duration) : "",
-      });
+      };
+
+      // Only populate duration for dog walking and drop-in visits, not pet sitting
+      if (!serviceType.includes("Sitting")) {
+        bookingFields["Duration"] = duration ? String(duration) : "";
+        console.log(`Added Duration: ${duration}`);
+      } else {
+        console.log(`Skipping Duration for Pet Sitting`);
+      }
+
+      await table.create(bookingFields);
     }
 
     console.log(`Created ${dates.length} confirmed booking(s) for service request ${serviceRequest.id}`);
