@@ -77,29 +77,26 @@ export async function createOrGetSquareCustomer(
   }
 }
 
-// Create order for invoice
+// Create order for invoice with detailed line items
 async function createOrderForInvoice(
   locationId: string,
   customerId: string,
-  amount: number,
-  description: string
+  lineItems: Array<{ name: string; amount: number }>
 ) {
-  const amountCents = Math.round(amount * 100);
+  const orderLineItems = lineItems.map(item => ({
+    name: item.name,
+    quantity: "1",
+    base_price_money: {
+      amount: Math.round(item.amount * 100),
+      currency: "GBP",
+    },
+  }));
 
   const orderResponse = await makeSquareRequest("POST", "/orders", {
     order: {
       location_id: locationId,
       customer_id: customerId,
-      line_items: [
-        {
-          name: description,
-          quantity: "1",
-          base_price_money: {
-            amount: amountCents,
-            currency: "GBP",
-          },
-        },
-      ],
+      line_items: orderLineItems,
     },
   });
 
@@ -116,6 +113,12 @@ interface CreateInvoiceParams {
   serviceRequestId: string;
   depositDueDays?: number;
   balanceDueDays?: number;
+  serviceRequestData?: {
+    preferredDates?: string; // JSON string with standardised_dates
+    pricePerUnit?: number;
+    addOnPrice?: number;
+    serviceType?: string;
+  };
 }
 
 // Create invoice with deposit and balance payment requests
@@ -129,14 +132,60 @@ export async function createInvoice(params: CreateInvoiceParams) {
   try {
     const depositDueDays = params.depositDueDays || 7;
     const balanceDueDays = params.balanceDueDays || 30;
-    const totalAmount = params.depositAmount + params.balanceAmount;
 
-    // Create single order with total amount
+    // Build line items from service request data
+    const lineItems: Array<{ name: string; amount: number }> = [];
+
+    if (params.serviceRequestData?.preferredDates && params.serviceRequestData?.pricePerUnit) {
+      try {
+        const dateData = JSON.parse(params.serviceRequestData.preferredDates);
+        const dates: string[] = dateData.standardised_dates || [];
+        const pricePerUnit = params.serviceRequestData.pricePerUnit;
+        const serviceType = params.serviceRequestData.serviceType || "Service";
+
+        // Create a line item for each date
+        for (const entry of dates) {
+          const datePart = entry.split(" | ")[0]?.trim();
+          if (datePart) {
+            const [day, month, year] = datePart.split("/");
+            const formattedDate = `${day}/${month}/${year}`;
+            lineItems.push({
+              name: `${serviceType} - ${formattedDate}`,
+              amount: pricePerUnit,
+            });
+          }
+        }
+      } catch (error) {
+        console.error("Error parsing dates for line items:", error);
+        // Fallback to simple line item if date parsing fails
+        lineItems.push({
+          name: params.description,
+          amount: params.depositAmount + params.balanceAmount,
+        });
+      }
+    } else {
+      // Fallback if no detailed data provided
+      lineItems.push({
+        name: params.description,
+        amount: params.depositAmount + params.balanceAmount,
+      });
+    }
+
+    // Add add-on line item if present
+    if (params.serviceRequestData?.addOnPrice && params.serviceRequestData.addOnPrice > 0) {
+      lineItems.push({
+        name: "Add-on",
+        amount: params.serviceRequestData.addOnPrice,
+      });
+    }
+
+    const totalAmount = lineItems.reduce((sum, item) => sum + item.amount, 0);
+
+    // Create single order with detailed line items
     const order = await createOrderForInvoice(
       locationId,
       params.customerId,
-      totalAmount,
-      params.description
+      lineItems
     );
 
     const depositDueDate = new Date(Date.now() + depositDueDays * 24 * 60 * 60 * 1000)

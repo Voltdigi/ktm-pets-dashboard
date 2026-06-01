@@ -117,6 +117,12 @@ export async function POST(request: NextRequest) {
           balanceAmount: balanceAmount || 0,
           description,
           serviceRequestId: recordId,
+          serviceRequestData: {
+            preferredDates: fields["Preferred Date and Time"],
+            pricePerUnit: fields["Price Per Unit"],
+            addOnPrice: fields["Add-on Price"],
+            serviceType: fields["Service Type"],
+          },
         });
 
         if (!invoice.id || invoice.version === undefined) {
