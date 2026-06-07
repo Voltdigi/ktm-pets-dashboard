@@ -11,6 +11,7 @@ import {
   RiDashboardLine,
   RiQrCodeLine,
   RiTeamLine,
+  RiServiceLine,
   RiLogoutBoxLine,
 } from "@remixicon/react"
 
@@ -30,6 +31,11 @@ const navItems: NavItem[] = [
     label: "Clients",
     icon: <RiTeamLine className="w-5 h-5" />,
     href: "/dashboard/clients",
+  },
+  {
+    label: "Service Requests",
+    icon: <RiServiceLine className="w-5 h-5" />,
+    href: "/dashboard/service-requests",
   },
   {
     label: "QR Generator",
