@@ -3,6 +3,7 @@ import {
   createOrGetSquareCustomer,
   createInvoice,
   publishInvoice,
+  getInvoiceById,
 } from "../utils";
 import {
   getPendingPaymentRequests,
@@ -87,11 +88,23 @@ async function processServiceRequest(recordId: string) {
     // Publish invoice
     const publishedInvoice = await publishInvoice(invoice.id, invoice.version);
 
+    // Get invoice details to retrieve public_url
+    let invoiceDetails;
+    try {
+      invoiceDetails = await getInvoiceById(publishedInvoice.id);
+    } catch (error) {
+      console.error(`Error fetching invoice details: ${publishedInvoice.id}`, error);
+      invoiceDetails = publishedInvoice;
+    }
+
     // Update Airtable with invoice information
-    await updateServiceRequest(recordId, {
+    const updateParams = {
       squareCustomerId: customer.id,
       squareInvoiceId: publishedInvoice.id,
-    });
+      squareInvoiceLink: invoiceDetails?.public_url,
+    };
+
+    await updateServiceRequest(recordId, updateParams);
 
     console.log(
       `Successfully created invoice for ${clientName}: ${publishedInvoice.id}`

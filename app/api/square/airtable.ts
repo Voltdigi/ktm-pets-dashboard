@@ -53,6 +53,7 @@ export async function getPendingPaymentRequests() {
 interface UpdateServiceRequestParams {
   status?: string;
   squareInvoiceId?: string;
+  squareInvoiceLink?: string;
   squareCustomerId?: string;
 }
 
@@ -67,6 +68,8 @@ export async function updateServiceRequest(
     if (updates.status) fields["Status"] = updates.status;
     if (updates.squareInvoiceId)
       fields["Square Invoice ID"] = updates.squareInvoiceId;
+    if (updates.squareInvoiceLink)
+      fields["Square Invoice Link"] = updates.squareInvoiceLink;
     if (updates.squareCustomerId)
       fields["Square Customer ID"] = updates.squareCustomerId;
 

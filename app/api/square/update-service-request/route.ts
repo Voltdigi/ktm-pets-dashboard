@@ -4,6 +4,7 @@ import {
   createOrGetSquareCustomer,
   createInvoice,
   publishInvoice,
+  getInvoiceById,
 } from "../utils";
 import { getAirtableBase } from "../airtable";
 
@@ -132,11 +133,26 @@ export async function POST(request: NextRequest) {
         // Publish invoice
         const publishedInvoice = await publishInvoice(invoice.id, invoice.version);
 
+        // Get invoice details to retrieve public_url
+        let invoiceDetails;
+        try {
+          invoiceDetails = await getInvoiceById(publishedInvoice.id);
+        } catch (error) {
+          console.error(`Error fetching invoice details: ${publishedInvoice.id}`, error);
+          invoiceDetails = publishedInvoice;
+        }
+
         // Update service request with new status and invoice ID
-        const updatedRecord = await updateServiceRequestStatus(recordId, newStatus, {
+        const updateData = {
           "Square Customer ID": customer.id,
           "Square Invoice ID": publishedInvoice.id,
-        });
+        };
+
+        if (invoiceDetails?.public_url) {
+          updateData["Square Invoice Link"] = invoiceDetails.public_url;
+        }
+
+        const updatedRecord = await updateServiceRequestStatus(recordId, newStatus, updateData);
 
         return NextResponse.json({
           success: true,

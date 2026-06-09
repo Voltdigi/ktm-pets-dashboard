@@ -10,6 +10,9 @@ import {
   RiRefreshLine,
   RiArrowDownSLine,
   RiArrowUpSLine,
+  RiExternalLinkLine,
+  RiFileCopyLine,
+  RiCheckLine,
 } from "@remixicon/react"
 
 interface AirtableRecord {
@@ -23,6 +26,7 @@ export default function ServiceRequestsPage() {
   )
 
   const [expandedIds, setExpandedIds] = useState<Set<string>>(new Set())
+  const [copiedId, setCopiedId] = useState<string | null>(null)
 
   const toggleExpanded = (recordId: string) => {
     const newSet = new Set(expandedIds)
@@ -32,6 +36,12 @@ export default function ServiceRequestsPage() {
       newSet.add(recordId)
     }
     setExpandedIds(newSet)
+  }
+
+  const copyToClipboard = (text: string, recordId: string) => {
+    navigator.clipboard.writeText(text)
+    setCopiedId(recordId)
+    setTimeout(() => setCopiedId(null), 2000)
   }
 
   const handleStatusUpdate = async (recordId: string, newStatus: string) => {
@@ -142,7 +152,9 @@ export default function ServiceRequestsPage() {
                   <div className="text-xs font-semibold text-muted-foreground uppercase">Date Submitted</div>
                   <div className="text-xs font-semibold text-muted-foreground uppercase">Status</div>
                 </div>
-                <div className="flex-shrink-0 w-5" />
+                <div className="flex-shrink-0 flex flex-col items-center gap-1">
+                  <div className="text-xs font-semibold text-muted-foreground uppercase">Invoice</div>
+                </div>
               </div>
 
               {serviceRequests.map((request) => {
@@ -162,31 +174,60 @@ export default function ServiceRequestsPage() {
                   "Status",
                 ]
 
+                const invoiceLink = request.fields["Square Invoice Link"]
+
                 return (
                   <div key={request.id} className="border border-border/40 rounded-lg overflow-hidden">
                     {/* Summary Row */}
-                    <button
-                      onClick={() => toggleExpanded(request.id)}
-                      className="w-full bg-card hover:bg-secondary/50 transition-colors p-4 flex items-center gap-4 text-left"
-                    >
-                      <div className="flex-1 grid grid-cols-4 gap-4">
-                        <div className="text-sm font-medium">{clientName}</div>
-                        <div className="text-sm">{serviceType}</div>
-                        <div className="text-sm">{date}</div>
-                        <div className="text-sm">
-                          <span className={`inline-block px-2 py-1 rounded-full text-xs font-medium ${getStatusColor(status)}`}>
-                            {status}
-                          </span>
+                    <div className="bg-card hover:bg-secondary/50 transition-colors p-4 flex items-center gap-4">
+                      <button
+                        onClick={() => toggleExpanded(request.id)}
+                        className="flex-1 flex items-center gap-4 text-left"
+                      >
+                        <div className="flex-1 grid grid-cols-4 gap-4">
+                          <div className="text-sm font-medium">{clientName}</div>
+                          <div className="text-sm">{serviceType}</div>
+                          <div className="text-sm">{date}</div>
+                          <div className="text-sm">
+                            <span className={`inline-block px-2 py-1 rounded-full text-xs font-medium ${getStatusColor(status)}`}>
+                              {status}
+                            </span>
+                          </div>
                         </div>
-                      </div>
-                      <div className="flex-shrink-0">
+                      </button>
+
+                      <div className="flex flex-col items-center gap-1 flex-shrink-0">
+                        <div className="flex items-center gap-1">
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            disabled={!invoiceLink}
+                            onClick={() => invoiceLink && window.open(invoiceLink, '_blank')}
+                            title={invoiceLink ? "Open invoice" : "No invoice link available"}
+                          >
+                            <RiExternalLinkLine className="w-4 h-4" />
+                          </Button>
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            disabled={!invoiceLink}
+                            onClick={() => invoiceLink && copyToClipboard(invoiceLink, request.id)}
+                            title={invoiceLink ? "Copy invoice link" : "No invoice link available"}
+                          >
+                            {copiedId === request.id ? (
+                              <RiCheckLine className="w-4 h-4 text-green-600" />
+                            ) : (
+                              <RiFileCopyLine className="w-4 h-4" />
+                            )}
+                          </Button>
+                        </div>
                         {isExpanded ? (
                           <RiArrowUpSLine className="w-5 h-5 text-muted-foreground" />
                         ) : (
                           <RiArrowDownSLine className="w-5 h-5 text-muted-foreground" />
                         )}
                       </div>
-                    </button>
+                    </div>
 
                     {/* Expanded Detail */}
                     {isExpanded && (

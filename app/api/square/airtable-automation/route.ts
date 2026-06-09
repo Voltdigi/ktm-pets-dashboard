@@ -3,6 +3,7 @@ import {
   createOrGetSquareCustomer,
   createInvoice,
   publishInvoice,
+  getInvoiceById,
 } from "../utils";
 import {
   updateServiceRequest,
@@ -90,10 +91,14 @@ async function processServiceRequest(recordId: string) {
     // Publish invoice
     const publishedInvoice = await publishInvoice(invoice.id, invoice.version);
 
+    // Get invoice details to retrieve public_url
+    const invoiceDetails = await getInvoiceById(publishedInvoice.id);
+
     // Update Airtable with invoice information
     await updateServiceRequest(recordId, {
       squareCustomerId: customer.id,
       squareInvoiceId: publishedInvoice.id,
+      squareInvoiceLink: invoiceDetails.public_url,
     });
 
     console.log(
