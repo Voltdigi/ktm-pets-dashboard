@@ -13,6 +13,7 @@ import {
   RiTeamLine,
   RiServiceLine,
   RiLogoutBoxLine,
+  RiHeartLine,
 } from "@remixicon/react"
 
 interface NavItem {
@@ -31,6 +32,11 @@ const navItems: NavItem[] = [
     label: "Clients",
     icon: <RiTeamLine className="w-5 h-5" />,
     href: "/dashboard/clients",
+  },
+  {
+    label: "Pets",
+    icon: <RiHeartLine className="w-5 h-5" />,
+    href: "/dashboard/pets",
   },
   {
     label: "Service Requests",
