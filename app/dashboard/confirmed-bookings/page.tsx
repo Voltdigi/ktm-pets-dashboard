@@ -31,6 +31,7 @@ interface BookingDisplay {
   serviceType: string
   time: string
   duration: string
+  petNames: string
   fields: Record<string, any>
 }
 
@@ -46,28 +47,61 @@ export default function ConfirmedBookingsPage() {
   const [detailsLoading, setDetailsLoading] = useState(false)
 
   useEffect(() => {
-    const map = new Map<string, BookingDisplay[]>()
+    const fetchPetNames = async () => {
+      const map = new Map<string, BookingDisplay[]>()
 
-    bookings.forEach((booking: any) => {
-      const date = booking.fields["Date"]
-      if (date) {
-        const display: BookingDisplay = {
+      const promises = bookings.map(async (booking: any) => {
+        const date = booking.fields["Date"]
+        if (!date) return null
+
+        let petNames = "Unknown"
+
+        try {
+          const response = await fetch("/api/bookings/details", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ bookingId: booking.id }),
+          })
+          const data = await response.json()
+          if (data.pets) {
+            petNames = data.pets
+          } else if (data.error) {
+            console.error("API error:", data.error)
+          }
+        } catch (error) {
+          console.error("Error fetching pet names:", error)
+        }
+
+        return {
           id: booking.id,
           date,
           serviceType: booking.fields["Service Type"] || "Service",
           time: booking.fields["Time"] || "TBD",
           duration: booking.fields["Duration"] || "",
+          petNames,
           fields: booking.fields,
         }
+      })
 
-        if (!map.has(date)) {
-          map.set(date, [])
+      const displayBookings = await Promise.all(promises)
+
+      displayBookings.forEach((display) => {
+        if (display) {
+          if (!map.has(display.date)) {
+            map.set(display.date, [])
+          }
+          map.get(display.date)!.push(display)
         }
-        map.get(date)!.push(display)
-      }
-    })
+      })
 
-    setBookingsByDate(map)
+      setBookingsByDate(map)
+    }
+
+    if (bookings.length > 0) {
+      fetchPetNames()
+    } else {
+      setBookingsByDate(new Map())
+    }
   }, [bookings])
 
   const getDaysInMonth = (date: Date) => {
@@ -96,12 +130,10 @@ export default function ConfirmedBookingsPage() {
   const year = currentDate.getFullYear()
   const month = currentDate.getMonth()
 
-  // Empty cells for days before month starts
   for (let i = 0; i < firstDay; i++) {
     days.push(null)
   }
 
-  // Days of the month
   for (let day = 1; day <= daysInMonth; day++) {
     days.push(day)
   }
@@ -110,7 +142,6 @@ export default function ConfirmedBookingsPage() {
 
   return (
     <div className="min-h-screen bg-background text-foreground">
-      {/* Header */}
       <header className="sticky top-0 z-20 border-b border-border/40 backdrop-blur-md bg-background/95">
         <div className="flex items-center justify-between px-4 py-4 sm:px-6 lg:px-8 pl-28 sm:pl-6">
           <div className="flex items-center gap-3">
@@ -136,10 +167,8 @@ export default function ConfirmedBookingsPage() {
         </div>
       </header>
 
-      {/* Floating Sidebar */}
       <FloatingSidebar />
 
-      {/* Main Content */}
       <main className="px-4 py-4 sm:px-6 lg:px-8">
         <div className="mx-auto max-w-6xl">
           <Card className="p-4">
@@ -150,7 +179,6 @@ export default function ConfirmedBookingsPage() {
               </div>
             )}
 
-            {/* Calendar Header */}
             <div className="flex items-center justify-between mb-3">
               <Button
                 variant="outline"
@@ -169,7 +197,6 @@ export default function ConfirmedBookingsPage() {
               </Button>
             </div>
 
-            {/* Weekday Headers */}
             <div className="grid grid-cols-7 gap-0.5 mb-1">
               {["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"].map((day) => (
                 <div
@@ -181,7 +208,6 @@ export default function ConfirmedBookingsPage() {
               ))}
             </div>
 
-            {/* Calendar Grid */}
             <div className="grid grid-cols-7 gap-0.5 bg-secondary/20 p-0.5 rounded-lg">
               {days.map((day, index) => {
                 const dateStr = day
@@ -228,12 +254,12 @@ export default function ConfirmedBookingsPage() {
                                     })
                                 }}
                                 className="bg-primary/10 text-primary rounded px-0.5 py-0.5 line-clamp-1 hover:line-clamp-none cursor-pointer hover:bg-primary/20 transition-colors"
-                                title={`${booking.serviceType} at ${booking.time}${
+                                title={`${booking.petNames} - ${booking.serviceType} at ${booking.time}${
                                   booking.duration ? ` (${booking.duration})` : ""
                                 }`}
                               >
                                 <div className="font-medium truncate text-xs">
-                                  {booking.serviceType}
+                                  {booking.petNames}
                                 </div>
                               </div>
                             ))
@@ -246,14 +272,12 @@ export default function ConfirmedBookingsPage() {
               })}
             </div>
 
-            {/* Loading State */}
             {loading && (
               <div className="text-center py-8 text-muted-foreground">
                 Loading bookings...
               </div>
             )}
 
-            {/* Empty State */}
             {!loading && !error && bookings.length === 0 && (
               <div className="text-center py-8 text-muted-foreground mt-6">
                 No confirmed bookings found
@@ -263,7 +287,6 @@ export default function ConfirmedBookingsPage() {
         </div>
       </main>
 
-      {/* Booking Details Modal */}
       {selectedBooking && (
         <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4">
           <Card className="w-full max-w-2xl max-h-[90vh] overflow-y-auto">
@@ -290,7 +313,6 @@ export default function ConfirmedBookingsPage() {
                 </div>
               ) : (
                 <>
-                  {/* Service Details */}
                   <div className="space-y-4">
                     <h4 className="font-semibold text-foreground">Service</h4>
                     <div className="grid grid-cols-2 gap-4">
@@ -332,7 +354,6 @@ export default function ConfirmedBookingsPage() {
                     </div>
                   </div>
 
-                  {/* Client Details */}
                   {bookingDetails?.serviceRequest && (
                     <div className="space-y-4 border-t border-border/40 pt-6">
                       <h4 className="font-semibold text-foreground">Client</h4>
@@ -373,7 +394,6 @@ export default function ConfirmedBookingsPage() {
                     </div>
                   )}
 
-                  {/* Address */}
                   {bookingDetails?.address && (
                     <div className="space-y-4 border-t border-border/40 pt-6">
                       <h4 className="font-semibold text-foreground">Location</h4>
@@ -388,7 +408,6 @@ export default function ConfirmedBookingsPage() {
                     </div>
                   )}
 
-                  {/* All Booking Fields */}
                   <div className="space-y-4 border-t border-border/40 pt-6">
                     <h4 className="font-semibold text-foreground">Booking Fields</h4>
                     <div className="space-y-3 max-h-48 overflow-y-auto">
