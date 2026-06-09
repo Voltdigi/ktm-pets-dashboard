@@ -48,7 +48,7 @@ export default function ConfirmedBookingsPage() {
   useEffect(() => {
     const map = new Map<string, BookingDisplay[]>()
 
-    bookings.forEach((booking: Booking) => {
+    bookings.forEach((booking: any) => {
       const date = booking.fields["Date"]
       if (date) {
         const display: BookingDisplay = {
