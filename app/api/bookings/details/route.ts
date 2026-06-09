@@ -90,14 +90,14 @@ export async function POST(request: NextRequest) {
 
     // Get service request
     const requestIds = bookingFields["Request ID"];
-    if (!requestIds || requestIds.length === 0) {
+    if (!requestIds || !Array.isArray(requestIds) || requestIds.length === 0) {
       return NextResponse.json(
         { booking: bookingFields },
         { status: 200 }
       );
     }
 
-    const serviceRequest = await getServiceRequest(base, requestIds[0]);
+    const serviceRequest = await getServiceRequest(base, requestIds[0] as string);
     if (!serviceRequest) {
       return NextResponse.json(
         { booking: bookingFields },

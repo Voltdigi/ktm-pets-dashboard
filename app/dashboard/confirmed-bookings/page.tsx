@@ -140,9 +140,9 @@ export default function ConfirmedBookingsPage() {
       <FloatingSidebar />
 
       {/* Main Content */}
-      <main className="px-4 py-8 sm:px-6 lg:px-8">
+      <main className="px-4 py-4 sm:px-6 lg:px-8">
         <div className="mx-auto max-w-6xl">
-          <Card className="p-6">
+          <Card className="p-4">
             {error && (
               <div className="text-center py-8 text-red-600 dark:text-red-400 mb-6">
                 <p className="font-medium">Error loading bookings</p>
@@ -151,7 +151,7 @@ export default function ConfirmedBookingsPage() {
             )}
 
             {/* Calendar Header */}
-            <div className="flex items-center justify-between mb-6">
+            <div className="flex items-center justify-between mb-3">
               <Button
                 variant="outline"
                 size="sm"
@@ -159,7 +159,7 @@ export default function ConfirmedBookingsPage() {
               >
                 <RiArrowLeftSLine className="w-4 h-4" />
               </Button>
-              <h2 className="text-xl font-semibold">{monthName}</h2>
+              <h2 className="text-lg font-semibold">{monthName}</h2>
               <Button
                 variant="outline"
                 size="sm"
@@ -170,11 +170,11 @@ export default function ConfirmedBookingsPage() {
             </div>
 
             {/* Weekday Headers */}
-            <div className="grid grid-cols-7 gap-1 mb-2">
+            <div className="grid grid-cols-7 gap-0.5 mb-1">
               {["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"].map((day) => (
                 <div
                   key={day}
-                  className="text-center text-sm font-semibold text-muted-foreground py-2"
+                  className="text-center text-xs font-semibold text-muted-foreground py-1"
                 >
                   {day}
                 </div>
@@ -182,7 +182,7 @@ export default function ConfirmedBookingsPage() {
             </div>
 
             {/* Calendar Grid */}
-            <div className="grid grid-cols-7 gap-1 bg-secondary/20 p-1 rounded-lg">
+            <div className="grid grid-cols-7 gap-0.5 bg-secondary/20 p-0.5 rounded-lg">
               {days.map((day, index) => {
                 const dateStr = day
                   ? formatDate(year, month, day)
@@ -192,7 +192,7 @@ export default function ConfirmedBookingsPage() {
                 return (
                   <div
                     key={index}
-                    className={`min-h-32 p-2 rounded border transition-colors ${
+                    className={`min-h-24 p-1 rounded border transition-colors text-xs ${
                       day
                         ? "bg-card border-border/40 hover:bg-secondary/50"
                         : "bg-transparent border-transparent"
@@ -200,10 +200,10 @@ export default function ConfirmedBookingsPage() {
                   >
                     {day && (
                       <>
-                        <div className="text-sm font-semibold mb-2 text-foreground">
+                        <div className="text-xs font-semibold mb-1 text-foreground">
                           {day}
                         </div>
-                        <div className="space-y-1">
+                        <div className="space-y-0.5 overflow-y-auto max-h-20">
                           {dayBookings && dayBookings.length > 0 ? (
                             dayBookings.map((booking, i) => (
                               <div
@@ -227,22 +227,17 @@ export default function ConfirmedBookingsPage() {
                                       setDetailsLoading(false)
                                     })
                                 }}
-                                className="text-xs bg-primary/10 text-primary rounded p-1 line-clamp-2 hover:line-clamp-none cursor-pointer hover:bg-primary/20 transition-colors"
+                                className="bg-primary/10 text-primary rounded px-0.5 py-0.5 line-clamp-1 hover:line-clamp-none cursor-pointer hover:bg-primary/20 transition-colors"
                                 title={`${booking.serviceType} at ${booking.time}${
                                   booking.duration ? ` (${booking.duration})` : ""
                                 }`}
                               >
-                                <div className="font-medium truncate">
+                                <div className="font-medium truncate text-xs">
                                   {booking.serviceType}
-                                </div>
-                                <div className="text-xs opacity-75 truncate">
-                                  {booking.time}
                                 </div>
                               </div>
                             ))
-                          ) : (
-                            <div className="text-xs text-muted-foreground/50">No bookings</div>
-                          )}
+                          ) : null}
                         </div>
                       </>
                     )}
