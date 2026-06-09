@@ -143,7 +143,7 @@ export async function POST(request: NextRequest) {
         }
 
         // Update service request with new status and invoice ID
-        const updateData = {
+        const updateData: Record<string, any> = {
           "Square Customer ID": customer.id,
           "Square Invoice ID": publishedInvoice.id,
         };
