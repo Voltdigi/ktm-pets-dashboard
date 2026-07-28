@@ -1,31 +1,15 @@
 import { NextRequest, NextResponse } from "next/server";
-import crypto from "crypto";
 import {
   findServiceRequestByInvoiceId,
   updateServiceRequest,
   getServiceRequest,
   createConfirmedBookings,
 } from "../airtable";
-import { publishInvoice, getInvoiceById } from "../utils";
-
-// Verify Square webhook signature
-function verifySquareWebhookSignature(
-  body: string,
-  signature: string | null,
-  webhookUrl: string
-): boolean {
-  if (!process.env.SQUARE_WEBHOOK_SIGNATURE_KEY || !signature) {
-    console.warn("Webhook signature key or signature missing");
-    return false;
-  }
-
-  const hash = crypto
-    .createHmac("sha256", process.env.SQUARE_WEBHOOK_SIGNATURE_KEY)
-    .update(webhookUrl + body)
-    .digest("base64");
-
-  return hash === signature;
-}
+import {
+  publishInvoice,
+  getInvoiceById,
+  verifySquareWebhookSignature,
+} from "../utils";
 
 interface SquareEvent {
   type: string;

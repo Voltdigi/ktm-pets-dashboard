@@ -43,15 +43,39 @@ export function getFirstBookingDate(preferredDatesJson: string): string | null {
   return parsed.length > 0 ? parsed[0].isoDate : null;
 }
 
+function isSandbox() {
+  return process.env.SQUARE_ENVIRONMENT === "sandbox";
+}
+
+function getSquareAccessToken() {
+  return isSandbox()
+    ? process.env.SQUARE_ACCESS_TOKEN_SANDBOX
+    : process.env.SQUARE_ACCESS_TOKEN_PRODUCTION;
+}
+
+export function getSquareLocationId() {
+  return isSandbox()
+    ? process.env.SQUARE_LOCATION_ID_SANDBOX
+    : process.env.SQUARE_LOCATION_ID_PRODUCTION;
+}
+
+function getSquareWebhookSignatureKey() {
+  return isSandbox()
+    ? process.env.SQUARE_WEBHOOK_SIGNATURE_KEY_SANDBOX
+    : process.env.SQUARE_WEBHOOK_SIGNATURE_KEY_PRODUCTION;
+}
+
 // Make raw HTTP request to Square API
 async function makeSquareRequest(
   method: string,
   path: string,
   body?: any
 ) {
-  const token = process.env.SQUARE_ACCESS_TOKEN;
-  const url = `https://connect.squareupsandbox.com/v2${path}`;
-
+  const token = getSquareAccessToken();
+  const squareBaseUrl = isSandbox()
+    ? "https://connect.squareupsandbox.com/v2"
+    : "https://connect.squareup.com/v2";
+  const url = `${squareBaseUrl}${path}`;
 
   const response = await fetch(url, {
     method,
@@ -164,10 +188,10 @@ interface CreateInvoiceParams {
 
 // Create invoice with deposit and balance payment requests
 export async function createInvoice(params: CreateInvoiceParams) {
-  const locationId = process.env.SQUARE_LOCATION_ID;
+  const locationId = getSquareLocationId();
 
   if (!locationId) {
-    throw new Error("Missing SQUARE_LOCATION_ID");
+    throw new Error("Missing Square location ID");
   }
 
   try {
@@ -303,10 +327,10 @@ export async function createInvoice(params: CreateInvoiceParams) {
 
 // Publish invoice
 export async function publishInvoice(invoiceId: string, version: number) {
-  const locationId = process.env.SQUARE_LOCATION_ID;
+  const locationId = getSquareLocationId();
 
   if (!locationId) {
-    throw new Error("Missing SQUARE_LOCATION_ID");
+    throw new Error("Missing Square location ID");
   }
 
   try {
@@ -345,13 +369,15 @@ export function verifySquareWebhookSignature(
   signature: string | null,
   webhookUrl: string
 ): boolean {
-  if (!process.env.SQUARE_WEBHOOK_SIGNATURE_KEY || !signature) {
+  const webhookSignatureKey = getSquareWebhookSignatureKey();
+
+  if (!webhookSignatureKey || !signature) {
     console.warn("Webhook signature key or signature missing");
     return false;
   }
 
   const hash = crypto
-    .createHmac("sha256", process.env.SQUARE_WEBHOOK_SIGNATURE_KEY)
+    .createHmac("sha256", webhookSignatureKey)
     .update(webhookUrl + body)
     .digest("base64");
 
