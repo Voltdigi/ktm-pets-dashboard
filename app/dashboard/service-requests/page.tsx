@@ -6,6 +6,7 @@ import { FloatingSidebar } from "@/components/floating-sidebar"
 import { ThemeToggle } from "@/components/theme-toggle"
 import { ServiceRequestCard } from "@/components/service-request-card"
 import { Button } from "@/components/ui/button"
+import { getStatusColor, DEFAULT_STATUS } from "@/lib/service-request-status"
 import {
   RiRefreshLine,
   RiArrowDownSLine,
@@ -76,18 +77,6 @@ export default function ServiceRequestsPage() {
 
   const loading = serviceRequestsLoading
   const error = serviceRequestsError
-
-  // Get status value and count for each status
-  const getStatusColor = (status: string): string => {
-    const statusColors: Record<string, string> = {
-      "Pending Review": "bg-yellow-100 text-yellow-800 dark:bg-yellow-900/30 dark:text-yellow-300",
-      "Payment Pending": "bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-300",
-      "Deposit Paid": "bg-purple-100 text-purple-800 dark:bg-purple-900/30 dark:text-purple-300",
-      "Full Paid": "bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-300",
-      "Rejected": "bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-300",
-    }
-    return statusColors[status] || "bg-gray-100 text-gray-800 dark:bg-gray-900/30 dark:text-gray-300"
-  }
 
   return (
     <div className="min-h-screen bg-background text-foreground">
@@ -164,7 +153,7 @@ export default function ServiceRequestsPage() {
                 const submittedDate = request.fields["Submitted Date"] || "—"
                 const createdTime = request.fields["Created"] ? new Date(request.fields["Created"]).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' }) : ""
                 const date = createdTime ? `${submittedDate} ${createdTime}` : submittedDate
-                const status = request.fields["Status"] || "Pending Review"
+                const status = request.fields["Status"] || DEFAULT_STATUS
 
                 // Fields to hide from expanded detail
                 const summaryFields = [

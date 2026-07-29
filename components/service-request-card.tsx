@@ -2,6 +2,7 @@
 
 import { useState } from "react"
 import { RiCheckLine, RiCloseLine, RiLoader4Line } from "@remixicon/react"
+import { STATUS_OPTIONS, DEFAULT_STATUS } from "@/lib/service-request-status"
 
 interface ServiceRequestCardProps {
   record: {
@@ -11,13 +12,11 @@ interface ServiceRequestCardProps {
   onStatusUpdate?: (recordId: string, newStatus: string) => Promise<void>
 }
 
-const STATUS_OPTIONS = ["Pending Review", "Payment Pending", "Deposit Paid", "Full Paid", "Rejected"]
-
 export function ServiceRequestCard({ record, onStatusUpdate }: ServiceRequestCardProps) {
   const [isLoading, setIsLoading] = useState(false)
   const [message, setMessage] = useState<{ type: "success" | "error"; text: string } | null>(null)
   const [isOpen, setIsOpen] = useState(false)
-  const currentStatus = record.fields["Status"] || "Pending Review"
+  const currentStatus = record.fields["Status"] || DEFAULT_STATUS
 
   const handleStatusChange = async (newStatus: string) => {
     if (newStatus === currentStatus || !onStatusUpdate) return
