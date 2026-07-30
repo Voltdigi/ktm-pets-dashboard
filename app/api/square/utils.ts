@@ -238,14 +238,15 @@ export async function createInvoice(params: CreateInvoiceParams) {
     if (params.serviceRequestData?.preferredDates && params.serviceRequestData?.pricePerUnit) {
       const parsedDates = parsePreferredDates(params.serviceRequestData.preferredDates);
       const pricePerUnit = params.serviceRequestData.pricePerUnit;
+      const addOnPrice = params.serviceRequestData.addOnPrice || 0;
       const serviceType = params.serviceRequestData.serviceType || "Service";
 
       if (parsedDates.length > 0) {
-        // Create a line item for each date
+        // Create a line item for each date, folding the add-on into the per-date unit price
         for (const parsed of parsedDates) {
           lineItems.push({
             name: `${serviceType} - ${parsed.datePart}`,
-            amount: pricePerUnit,
+            amount: pricePerUnit + addOnPrice,
           });
         }
       } else {
@@ -260,14 +261,6 @@ export async function createInvoice(params: CreateInvoiceParams) {
       lineItems.push({
         name: params.description,
         amount: params.depositAmount + params.balanceAmount,
-      });
-    }
-
-    // Add add-on line item if present
-    if (params.serviceRequestData?.addOnPrice && params.serviceRequestData.addOnPrice > 0) {
-      lineItems.push({
-        name: "Add-on",
-        amount: params.serviceRequestData.addOnPrice,
       });
     }
 

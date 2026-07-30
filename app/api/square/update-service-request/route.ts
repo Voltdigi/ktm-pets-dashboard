@@ -121,7 +121,7 @@ export async function POST(request: NextRequest) {
           serviceRequestData: {
             preferredDates: fields["Preferred Date and Time"],
             pricePerUnit: fields["Price Per Unit"],
-            addOnPrice: fields["Add-on Price"],
+            addOnPrice: fields["Add-On Price"],
             serviceType: fields["Service Type"],
           },
         });
