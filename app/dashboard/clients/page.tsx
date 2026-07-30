@@ -1,11 +1,14 @@
 "use client"
 
-import { useState } from "react"
+import { useMemo, useState } from "react"
 import { useAirtableData } from "@/hooks/useClients"
 import { FloatingSidebar } from "@/components/floating-sidebar"
 import { ThemeToggle } from "@/components/theme-toggle"
 import { Card } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
+import { SearchInput } from "@/components/search-input"
+import { SelectDropdown } from "@/components/select-dropdown"
+import { useListControls, type SortOption } from "@/hooks/useListControls"
 import {
   RiRefreshLine,
   RiArrowDownSLine,
@@ -15,6 +18,17 @@ import {
 interface AirtableRecord {
   id: string
   fields: Record<string, any>
+}
+
+interface ClientRow {
+  client: AirtableRecord
+  clientName: string
+  email: string
+  phone: string
+  petNames: string
+  nextBookingLabel: string
+  nextBookingSortKey: number
+  linkedPets: AirtableRecord[]
 }
 
 export default function ClientsPage() {
@@ -63,7 +77,7 @@ export default function ClientsPage() {
     )
   }
 
-  const getNextBookingForClient = (clientId: string, clientName: string): string => {
+  const getNextBookingForClient = (clientId: string, clientName: string): { label: string; sortKey: number } => {
     const futureBookings = bookings
       .filter((booking) => {
         const bookingClient = booking.fields["Client Name"] || booking.fields["Client"]
@@ -86,9 +100,10 @@ export default function ClientsPage() {
 
     if (futureBookings.length > 0) {
       const date = futureBookings[0].fields["Date"] || futureBookings[0].fields["Booking Date"]
-      return new Date(date).toLocaleDateString()
+      const bookingDate = new Date(date)
+      return { label: bookingDate.toLocaleDateString(), sortKey: bookingDate.getTime() }
     }
-    return "No upcoming bookings"
+    return { label: "No upcoming bookings", sortKey: Infinity }
   }
 
   const refetchAll = () => {
@@ -99,6 +114,38 @@ export default function ClientsPage() {
 
   const loading = clientsLoading || petsLoading || bookingsLoading
   const error = clientsError || petsError || bookingsError
+
+  const rows: ClientRow[] = useMemo(
+    () =>
+      clients.map((client) => {
+        const clientName = client.fields["Full Name"] || "Unknown"
+        const nextBooking = getNextBookingForClient(client.id, clientName)
+        return {
+          client,
+          clientName,
+          email: client.fields["Email"] || "",
+          phone: client.fields["Phone Number"] || "",
+          petNames: getPetNamesForClient(client.id),
+          nextBookingLabel: nextBooking.label,
+          nextBookingSortKey: nextBooking.sortKey,
+          linkedPets: getLinkedPetsForClient(client.id),
+        }
+      }),
+    [clients, pets, bookings]
+  )
+
+  const sortOptions: SortOption<ClientRow>[] = [
+    { value: "name-asc", label: "Name (A–Z)", compare: (a, b) => a.clientName.localeCompare(b.clientName) },
+    { value: "name-desc", label: "Name (Z–A)", compare: (a, b) => b.clientName.localeCompare(a.clientName) },
+    { value: "booking-asc", label: "Next Booking (Soonest)", compare: (a, b) => a.nextBookingSortKey - b.nextBookingSortKey },
+  ]
+
+  const { search, setSearch, sortValue, setSortValue, filteredData } = useListControls({
+    data: rows,
+    getSearchableValues: (r) => [r.clientName, r.email, r.phone, r.petNames, r.nextBookingLabel],
+    sortOptions,
+    defaultSortValue: "name-asc",
+  })
 
   return (
     <div className="min-h-screen bg-background text-foreground">
@@ -155,6 +202,22 @@ export default function ClientsPage() {
 
           {!loading && !error && clients.length > 0 && (
             <div className="space-y-2">
+              {/* Controls */}
+              <div className="flex flex-col sm:flex-row gap-2 mb-2">
+                <SearchInput
+                  value={search}
+                  onChange={setSearch}
+                  placeholder="Search clients..."
+                  className="sm:max-w-xs"
+                />
+                <SelectDropdown
+                  value={sortValue}
+                  onValueChange={setSortValue}
+                  options={sortOptions.map(({ value, label }) => ({ value, label }))}
+                  placeholder="Sort by"
+                />
+              </div>
+
               {/* Header Row */}
               <div className="sticky top-16 bg-background/95 backdrop-blur-sm border-b border-border/40 p-4 flex items-center gap-4 z-10">
                 <div className="flex-1 grid grid-cols-5 gap-4">
@@ -167,14 +230,15 @@ export default function ClientsPage() {
                 <div className="flex-shrink-0 w-5" />
               </div>
 
-              {clients.map((client) => {
+              {filteredData.length === 0 && (
+                <div className="text-center py-12 text-muted-foreground">
+                  No clients match your search
+                </div>
+              )}
+
+              {filteredData.map((row) => {
+                const client = row.client
                 const isExpanded = expandedIds.has(client.id)
-                const clientName = client.fields["Full Name"] || "Unknown"
-                const email = client.fields["Email"] || ""
-                const phone = client.fields["Phone Number"] || ""
-                const petNames = getPetNamesForClient(client.id)
-                const nextBooking = getNextBookingForClient(client.id, clientName)
-                const linkedPets = getLinkedPetsForClient(client.id)
 
                 // Fields to hide from expanded detail (already shown in summary)
                 const summaryFields = [
@@ -191,11 +255,11 @@ export default function ClientsPage() {
                       className="w-full bg-card hover:bg-secondary/50 transition-colors p-4 flex items-center gap-4 text-left"
                     >
                       <div className="flex-1 grid grid-cols-5 gap-4">
-                        <div className="text-sm font-medium">{clientName}</div>
-                        <div className="text-sm truncate">{email || "—"}</div>
-                        <div className="text-sm">{phone || "—"}</div>
-                        <div className="text-sm truncate">{petNames || "—"}</div>
-                        <div className="text-sm">{nextBooking}</div>
+                        <div className="text-sm font-medium">{row.clientName}</div>
+                        <div className="text-sm truncate">{row.email || "—"}</div>
+                        <div className="text-sm">{row.phone || "—"}</div>
+                        <div className="text-sm truncate">{row.petNames || "—"}</div>
+                        <div className="text-sm">{row.nextBookingLabel}</div>
                       </div>
                       <div className="flex-shrink-0">
                         {isExpanded ? (
@@ -231,11 +295,11 @@ export default function ClientsPage() {
                         </div>
 
                         {/* Linked Pets */}
-                        {linkedPets.length > 0 && (
+                        {row.linkedPets.length > 0 && (
                           <div>
-                            <h3 className="text-sm font-semibold mb-3">Pets ({linkedPets.length})</h3>
+                            <h3 className="text-sm font-semibold mb-3">Pets ({row.linkedPets.length})</h3>
                             <div className="space-y-3">
-                              {linkedPets.map((pet) => (
+                              {row.linkedPets.map((pet) => (
                                 <Card key={pet.id} className="p-4">
                                   <div className="grid grid-cols-2 gap-4">
                                     {Object.entries(pet.fields).map(([key, value]) => (

@@ -1,11 +1,14 @@
 "use client"
 
-import { useState } from "react"
+import { useMemo, useState } from "react"
 import { useAirtableData } from "@/hooks/useClients"
 import { FloatingSidebar } from "@/components/floating-sidebar"
 import { ThemeToggle } from "@/components/theme-toggle"
 import { Card } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
+import { SearchInput } from "@/components/search-input"
+import { SelectDropdown } from "@/components/select-dropdown"
+import { useListControls, type SortOption } from "@/hooks/useListControls"
 import {
   RiRefreshLine,
   RiArrowDownSLine,
@@ -15,6 +18,15 @@ import {
 interface AirtableRecord {
   id: string
   fields: Record<string, any>
+}
+
+interface PetRow {
+  pet: AirtableRecord
+  petName: string
+  species: string
+  breed: string
+  clientName: string
+  linkedClients: AirtableRecord[]
 }
 
 export default function PetsPage() {
@@ -69,6 +81,47 @@ export default function PetsPage() {
 
   const loading = petsLoading || clientsLoading
   const error = petsError || clientsError
+
+  const rows: PetRow[] = useMemo(
+    () =>
+      pets.map((pet) => {
+        const clientData = pet.fields["Client"]
+        return {
+          pet,
+          petName: pet.fields["Pet Name"] || "Unknown",
+          species: pet.fields["Species"] || "",
+          breed: pet.fields["Breed"] || "",
+          clientName: getClientNameForPet(clientData),
+          linkedClients: getLinkedClientsForPet(clientData),
+        }
+      }),
+    [pets, clients]
+  )
+
+  const speciesOptions = useMemo(
+    () => [
+      { value: "all", label: "All Species" },
+      ...Array.from(new Set(rows.map((r) => r.species).filter(Boolean)))
+        .sort()
+        .map((s) => ({ value: s, label: s })),
+    ],
+    [rows]
+  )
+
+  const sortOptions: SortOption<PetRow>[] = [
+    { value: "name-asc", label: "Pet Name (A–Z)", compare: (a, b) => a.petName.localeCompare(b.petName) },
+    { value: "name-desc", label: "Pet Name (Z–A)", compare: (a, b) => b.petName.localeCompare(a.petName) },
+    { value: "species-asc", label: "Species (A–Z)", compare: (a, b) => a.species.localeCompare(b.species) },
+  ]
+
+  const { search, setSearch, filterValue, setFilterValue, sortValue, setSortValue, filteredData } =
+    useListControls({
+      data: rows,
+      getSearchableValues: (r) => [r.petName, r.species, r.breed, r.clientName],
+      sortOptions,
+      defaultSortValue: "name-asc",
+      getFilterValue: (r) => r.species,
+    })
 
   return (
     <div className="min-h-screen bg-background text-foreground">
@@ -125,6 +178,28 @@ export default function PetsPage() {
 
           {!loading && !error && pets.length > 0 && (
             <div className="space-y-2">
+              {/* Controls */}
+              <div className="flex flex-col sm:flex-row gap-2 mb-2">
+                <SearchInput
+                  value={search}
+                  onChange={setSearch}
+                  placeholder="Search pets..."
+                  className="sm:max-w-xs"
+                />
+                <SelectDropdown
+                  value={filterValue}
+                  onValueChange={setFilterValue}
+                  options={speciesOptions}
+                  placeholder="Species"
+                />
+                <SelectDropdown
+                  value={sortValue}
+                  onValueChange={setSortValue}
+                  options={sortOptions.map(({ value, label }) => ({ value, label }))}
+                  placeholder="Sort by"
+                />
+              </div>
+
               {/* Header Row */}
               <div className="sticky top-16 bg-background/95 backdrop-blur-sm border-b border-border/40 p-4 flex items-center gap-4 z-10">
                 <div className="flex-1 grid grid-cols-4 gap-4">
@@ -136,14 +211,15 @@ export default function PetsPage() {
                 <div className="flex-shrink-0 w-5" />
               </div>
 
-              {pets.map((pet) => {
+              {filteredData.length === 0 && (
+                <div className="text-center py-12 text-muted-foreground">
+                  No pets match your search/filters
+                </div>
+              )}
+
+              {filteredData.map((row) => {
+                const pet = row.pet
                 const isExpanded = expandedIds.has(pet.id)
-                const petName = pet.fields["Pet Name"] || "Unknown"
-                const petSpecies = pet.fields["Species"] || ""
-                const breed = pet.fields["Breed"] || ""
-                const clientData = pet.fields["Client"]
-                const clientName = getClientNameForPet(clientData)
-                const linkedClients = getLinkedClientsForPet(clientData)
 
                 // Fields to hide from expanded detail (already shown in summary)
                 const summaryFields = [
@@ -161,10 +237,10 @@ export default function PetsPage() {
                       className="w-full bg-card hover:bg-secondary/50 transition-colors p-4 flex items-center gap-4 text-left"
                     >
                       <div className="flex-1 grid grid-cols-4 gap-4">
-                        <div className="text-sm font-medium">{petName}</div>
-                        <div className="text-sm">{petSpecies || "—"}</div>
-                        <div className="text-sm">{breed || "—"}</div>
-                        <div className="text-sm">{clientName}</div>
+                        <div className="text-sm font-medium">{row.petName}</div>
+                        <div className="text-sm">{row.species || "—"}</div>
+                        <div className="text-sm">{row.breed || "—"}</div>
+                        <div className="text-sm">{row.clientName}</div>
                       </div>
                       <div className="flex-shrink-0">
                         {isExpanded ? (
@@ -200,11 +276,11 @@ export default function PetsPage() {
                         </div>
 
                         {/* Linked Clients */}
-                        {linkedClients.length > 0 && (
+                        {row.linkedClients.length > 0 && (
                           <div>
-                            <h3 className="text-sm font-semibold mb-3">Owner ({linkedClients.length})</h3>
+                            <h3 className="text-sm font-semibold mb-3">Owner ({row.linkedClients.length})</h3>
                             <div className="space-y-3">
-                              {linkedClients.map((client) => (
+                              {row.linkedClients.map((client) => (
                                 <Card key={client.id} className="p-4">
                                   <div className="grid grid-cols-2 gap-4">
                                     {Object.entries(client.fields).map(([key, value]) => (

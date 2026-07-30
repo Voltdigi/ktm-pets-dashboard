@@ -1,12 +1,15 @@
 "use client"
 
-import { useState } from "react"
+import { useMemo, useState } from "react"
 import { useAirtableData } from "@/hooks/useClients"
 import { FloatingSidebar } from "@/components/floating-sidebar"
 import { ThemeToggle } from "@/components/theme-toggle"
 import { ServiceRequestCard } from "@/components/service-request-card"
 import { Button } from "@/components/ui/button"
-import { getStatusColor, DEFAULT_STATUS } from "@/lib/service-request-status"
+import { SearchInput } from "@/components/search-input"
+import { SelectDropdown } from "@/components/select-dropdown"
+import { useListControls, type SortOption } from "@/hooks/useListControls"
+import { getStatusColor, DEFAULT_STATUS, STATUS_OPTIONS } from "@/lib/service-request-status"
 import {
   RiRefreshLine,
   RiArrowDownSLine,
@@ -19,6 +22,16 @@ import {
 interface AirtableRecord {
   id: string
   fields: Record<string, any>
+}
+
+interface ServiceRequestRow {
+  record: AirtableRecord
+  clientName: string
+  serviceType: string
+  displayDate: string
+  dateSort: string
+  status: string
+  invoiceLink?: string
 }
 
 export default function ServiceRequestsPage() {
@@ -78,6 +91,47 @@ export default function ServiceRequestsPage() {
   const loading = serviceRequestsLoading
   const error = serviceRequestsError
 
+  const rows: ServiceRequestRow[] = useMemo(
+    () =>
+      serviceRequests.map((request) => {
+        const submittedDate = request.fields["Submitted Date"] || "—"
+        const createdTime = request.fields["Created"]
+          ? new Date(request.fields["Created"]).toLocaleTimeString("en-US", { hour: "2-digit", minute: "2-digit" })
+          : ""
+        return {
+          record: request,
+          clientName: request.fields["Client Name"] || "Unknown",
+          serviceType: request.fields["Service Type"] || "—",
+          displayDate: createdTime ? `${submittedDate} ${createdTime}` : submittedDate,
+          dateSort: request.fields["Submitted Date"] || "",
+          status: request.fields["Status"] || DEFAULT_STATUS,
+          invoiceLink: request.fields["Square Invoice Link"],
+        }
+      }),
+    [serviceRequests]
+  )
+
+  const sortOptions: SortOption<ServiceRequestRow>[] = [
+    { value: "date-desc", label: "Date Submitted (Newest)", compare: (a, b) => b.dateSort.localeCompare(a.dateSort) },
+    { value: "date-asc", label: "Date Submitted (Oldest)", compare: (a, b) => a.dateSort.localeCompare(b.dateSort) },
+    { value: "name-asc", label: "Client Name (A–Z)", compare: (a, b) => a.clientName.localeCompare(b.clientName) },
+    { value: "name-desc", label: "Client Name (Z–A)", compare: (a, b) => b.clientName.localeCompare(a.clientName) },
+  ]
+
+  const statusFilterOptions = [
+    { value: "all", label: "All Statuses" },
+    ...STATUS_OPTIONS.map((s) => ({ value: s, label: s })),
+  ]
+
+  const { search, setSearch, filterValue, setFilterValue, sortValue, setSortValue, filteredData } =
+    useListControls({
+      data: rows,
+      getSearchableValues: (r) => [r.clientName, r.serviceType, r.displayDate, r.status],
+      sortOptions,
+      defaultSortValue: "date-desc",
+      getFilterValue: (r) => r.status,
+    })
+
   return (
     <div className="min-h-screen bg-background text-foreground">
       {/* Header */}
@@ -133,6 +187,28 @@ export default function ServiceRequestsPage() {
 
           {!loading && !error && serviceRequests.length > 0 && (
             <div className="space-y-2">
+              {/* Controls */}
+              <div className="flex flex-col sm:flex-row gap-2 mb-2">
+                <SearchInput
+                  value={search}
+                  onChange={setSearch}
+                  placeholder="Search service requests..."
+                  className="sm:max-w-xs"
+                />
+                <SelectDropdown
+                  value={filterValue}
+                  onValueChange={setFilterValue}
+                  options={statusFilterOptions}
+                  placeholder="Status"
+                />
+                <SelectDropdown
+                  value={sortValue}
+                  onValueChange={setSortValue}
+                  options={sortOptions.map(({ value, label }) => ({ value, label }))}
+                  placeholder="Sort by"
+                />
+              </div>
+
               {/* Header Row */}
               <div className="sticky top-16 bg-background/95 backdrop-blur-sm border-b border-border/40 p-4 flex items-center gap-4 z-10">
                 <div className="flex-1 grid grid-cols-4 gap-4">
@@ -146,24 +222,15 @@ export default function ServiceRequestsPage() {
                 </div>
               </div>
 
-              {serviceRequests.map((request) => {
+              {filteredData.length === 0 && (
+                <div className="text-center py-12 text-muted-foreground">
+                  No service requests match your search/filters
+                </div>
+              )}
+
+              {filteredData.map((row) => {
+                const request = row.record
                 const isExpanded = expandedIds.has(request.id)
-                const clientName = request.fields["Client Name"] || "Unknown"
-                const serviceType = request.fields["Service Type"] || "—"
-                const submittedDate = request.fields["Submitted Date"] || "—"
-                const createdTime = request.fields["Created"] ? new Date(request.fields["Created"]).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' }) : ""
-                const date = createdTime ? `${submittedDate} ${createdTime}` : submittedDate
-                const status = request.fields["Status"] || DEFAULT_STATUS
-
-                // Fields to hide from expanded detail
-                const summaryFields = [
-                  "Client Name",
-                  "Service Type",
-                  "Submitted Date",
-                  "Status",
-                ]
-
-                const invoiceLink = request.fields["Square Invoice Link"]
 
                 return (
                   <div key={request.id} className="border border-border/40 rounded-lg overflow-hidden">
@@ -173,12 +240,12 @@ export default function ServiceRequestsPage() {
                       className="bg-card hover:bg-secondary/50 transition-colors p-4 flex items-center gap-4 cursor-pointer"
                     >
                       <div className="flex-1 grid grid-cols-4 gap-4">
-                        <div className="text-sm font-medium">{clientName}</div>
-                        <div className="text-sm">{serviceType}</div>
-                        <div className="text-sm">{date}</div>
+                        <div className="text-sm font-medium">{row.clientName}</div>
+                        <div className="text-sm">{row.serviceType}</div>
+                        <div className="text-sm">{row.displayDate}</div>
                         <div className="text-sm">
-                          <span className={`inline-block px-2 py-1 rounded-full text-xs font-medium ${getStatusColor(status)}`}>
-                            {status}
+                          <span className={`inline-block px-2 py-1 rounded-full text-xs font-medium ${getStatusColor(row.status)}`}>
+                            {row.status}
                           </span>
                         </div>
                       </div>
@@ -188,24 +255,24 @@ export default function ServiceRequestsPage() {
                           <Button
                             variant="outline"
                             size="sm"
-                            disabled={!invoiceLink}
+                            disabled={!row.invoiceLink}
                             onClick={(e) => {
                               e.stopPropagation()
-                              invoiceLink && window.open(invoiceLink, '_blank')
+                              row.invoiceLink && window.open(row.invoiceLink, '_blank')
                             }}
-                            title={invoiceLink ? "Open invoice" : "No invoice link available"}
+                            title={row.invoiceLink ? "Open invoice" : "No invoice link available"}
                           >
                             <RiExternalLinkLine className="w-4 h-4" />
                           </Button>
                           <Button
                             variant="outline"
                             size="sm"
-                            disabled={!invoiceLink}
+                            disabled={!row.invoiceLink}
                             onClick={(e) => {
                               e.stopPropagation()
-                              invoiceLink && copyToClipboard(invoiceLink, request.id)
+                              row.invoiceLink && copyToClipboard(row.invoiceLink, request.id)
                             }}
-                            title={invoiceLink ? "Copy invoice link" : "No invoice link available"}
+                            title={row.invoiceLink ? "Copy invoice link" : "No invoice link available"}
                           >
                             {copiedId === request.id ? (
                               <RiCheckLine className="w-4 h-4 text-green-600" />
