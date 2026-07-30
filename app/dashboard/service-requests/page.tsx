@@ -168,22 +168,20 @@ export default function ServiceRequestsPage() {
                 return (
                   <div key={request.id} className="border border-border/40 rounded-lg overflow-hidden">
                     {/* Summary Row */}
-                    <div className="bg-card hover:bg-secondary/50 transition-colors p-4 flex items-center gap-4">
-                      <button
-                        onClick={() => toggleExpanded(request.id)}
-                        className="flex-1 flex items-center gap-4 text-left"
-                      >
-                        <div className="flex-1 grid grid-cols-4 gap-4">
-                          <div className="text-sm font-medium">{clientName}</div>
-                          <div className="text-sm">{serviceType}</div>
-                          <div className="text-sm">{date}</div>
-                          <div className="text-sm">
-                            <span className={`inline-block px-2 py-1 rounded-full text-xs font-medium ${getStatusColor(status)}`}>
-                              {status}
-                            </span>
-                          </div>
+                    <div
+                      onClick={() => toggleExpanded(request.id)}
+                      className="bg-card hover:bg-secondary/50 transition-colors p-4 flex items-center gap-4 cursor-pointer"
+                    >
+                      <div className="flex-1 grid grid-cols-4 gap-4">
+                        <div className="text-sm font-medium">{clientName}</div>
+                        <div className="text-sm">{serviceType}</div>
+                        <div className="text-sm">{date}</div>
+                        <div className="text-sm">
+                          <span className={`inline-block px-2 py-1 rounded-full text-xs font-medium ${getStatusColor(status)}`}>
+                            {status}
+                          </span>
                         </div>
-                      </button>
+                      </div>
 
                       <div className="flex flex-col items-center gap-1 flex-shrink-0">
                         <div className="flex items-center gap-1">
@@ -191,7 +189,10 @@ export default function ServiceRequestsPage() {
                             variant="outline"
                             size="sm"
                             disabled={!invoiceLink}
-                            onClick={() => invoiceLink && window.open(invoiceLink, '_blank')}
+                            onClick={(e) => {
+                              e.stopPropagation()
+                              invoiceLink && window.open(invoiceLink, '_blank')
+                            }}
                             title={invoiceLink ? "Open invoice" : "No invoice link available"}
                           >
                             <RiExternalLinkLine className="w-4 h-4" />
@@ -200,7 +201,10 @@ export default function ServiceRequestsPage() {
                             variant="outline"
                             size="sm"
                             disabled={!invoiceLink}
-                            onClick={() => invoiceLink && copyToClipboard(invoiceLink, request.id)}
+                            onClick={(e) => {
+                              e.stopPropagation()
+                              invoiceLink && copyToClipboard(invoiceLink, request.id)
+                            }}
                             title={invoiceLink ? "Copy invoice link" : "No invoice link available"}
                           >
                             {copiedId === request.id ? (
