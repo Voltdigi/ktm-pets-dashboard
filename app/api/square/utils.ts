@@ -225,10 +225,12 @@ export async function createInvoice(params: CreateInvoiceParams) {
         // Calculate days until the calculated balance due date
         const daysUntilDue = Math.floor((balanceDueDateObj.getTime() - today.getTime()) / (1000 * 60 * 60 * 24));
 
-        // If calculated date is less than 5 days away or in the past, set due date to immediate
+        // If calculated date is less than 5 days away or in the past, set due date to tomorrow (must be different from deposit)
         if (daysUntilDue < 5) {
-          balanceDueDate = depositDueDate;
-          console.log(`Balance due date was less than 5 days away, setting to immediate`);
+          const tomorrowObj = new Date(today);
+          tomorrowObj.setDate(tomorrowObj.getDate() + 1);
+          balanceDueDate = tomorrowObj.toISOString().split("T")[0];
+          console.log(`Balance due date was less than 5 days away, setting to tomorrow`);
         } else {
           balanceDueDate = balanceDueDateObj.toISOString().split("T")[0];
           console.log(`First booking: ${parsedDates[0].datePart}, Balance due: ${daysBeforeBooking} days before`);
