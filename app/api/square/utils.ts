@@ -211,6 +211,8 @@ export async function createInvoice(params: CreateInvoiceParams) {
 
       if (parsedDates.length > 0) {
         const firstBookingDate = new Date(parsedDates[0].isoDate);
+        const today = new Date();
+        today.setHours(0, 0, 0, 0);
 
         // Determine days before booking based on service type
         const serviceType = params.serviceRequestData.serviceType;
@@ -219,9 +221,18 @@ export async function createInvoice(params: CreateInvoiceParams) {
         // Calculate balance due date (X days before first booking)
         const balanceDueDateObj = new Date(firstBookingDate);
         balanceDueDateObj.setDate(balanceDueDateObj.getDate() - daysBeforeBooking);
-        balanceDueDate = balanceDueDateObj.toISOString().split("T")[0];
 
-        console.log(`First booking: ${parsedDates[0].datePart}, Balance due: ${daysBeforeBooking} days before`);
+        // Calculate days until the calculated balance due date
+        const daysUntilDue = Math.floor((balanceDueDateObj.getTime() - today.getTime()) / (1000 * 60 * 60 * 24));
+
+        // If calculated date is less than 5 days away or in the past, set due date to immediate
+        if (daysUntilDue < 5) {
+          balanceDueDate = depositDueDate;
+          console.log(`Balance due date was less than 5 days away, setting to immediate`);
+        } else {
+          balanceDueDate = balanceDueDateObj.toISOString().split("T")[0];
+          console.log(`First booking: ${parsedDates[0].datePart}, Balance due: ${daysBeforeBooking} days before`);
+        }
       } else {
         // Fallback to default
         const balanceDueDateObj = new Date();
