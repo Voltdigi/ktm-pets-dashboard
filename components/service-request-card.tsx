@@ -1,8 +1,14 @@
 "use client"
 
 import { useState } from "react"
-import { RiCheckLine, RiCloseLine, RiLoader4Line } from "@remixicon/react"
-import { STATUS_OPTIONS, DEFAULT_STATUS } from "@/lib/service-request-status"
+import { RiCheckLine, RiCloseLine, RiLoader4Line, RiMailLine, RiMapPinLine, RiTimeLine } from "@remixicon/react"
+import { STATUS_OPTIONS, DEFAULT_STATUS, getStatusColor } from "@/lib/service-request-status"
+import {
+  formatCurrency,
+  formatDate,
+  getDaysPending,
+  formatAddress,
+} from "@/lib/service-request-formatting"
 
 interface ServiceRequestCardProps {
   record: {
@@ -10,13 +16,37 @@ interface ServiceRequestCardProps {
     fields: Record<string, any>
   }
   onStatusUpdate?: (recordId: string, newStatus: string) => Promise<void>
+  bookings?: Array<{
+    id: string
+    fields: Record<string, any>
+  }>
+  petNames?: string
 }
 
-export function ServiceRequestCard({ record, onStatusUpdate }: ServiceRequestCardProps) {
+export function ServiceRequestCard({ record, onStatusUpdate, bookings = [], petNames }: ServiceRequestCardProps) {
   const [isLoading, setIsLoading] = useState(false)
   const [message, setMessage] = useState<{ type: "success" | "error"; text: string } | null>(null)
   const [isOpen, setIsOpen] = useState(false)
-  const currentStatus = record.fields["Status"] || DEFAULT_STATUS
+
+  const fields = record.fields
+  const currentStatus = fields["Status"] || DEFAULT_STATUS
+
+  // Get linked bookings for this service request
+  const linkedBookings = bookings.filter((booking: any) => {
+    const requestIds = booking.fields["Request ID"]
+    if (!requestIds) return false
+    const idsArray = Array.isArray(requestIds) ? requestIds : [requestIds]
+    return idsArray.includes(record.id)
+  })
+
+  // Get booking dates
+  const bookingDates = linkedBookings
+    .map((booking: any) => booking.fields["Date"])
+    .filter((date: string) => date && date !== "")
+    .sort()
+
+  const firstBookingDate = bookingDates.length > 0 ? bookingDates[0] : null
+  const lastBookingDate = bookingDates.length > 1 ? bookingDates[bookingDates.length - 1] : null
 
   const handleStatusChange = async (newStatus: string) => {
     if (newStatus === currentStatus || !onStatusUpdate) return
@@ -47,84 +77,225 @@ export function ServiceRequestCard({ record, onStatusUpdate }: ServiceRequestCar
     }
   }
 
+  const daysPending = getDaysPending(fields["Submitted Date"])
+
   return (
-    <div className="p-4 border border-border/40 rounded-lg hover:bg-secondary/50 transition-colors">
+    <div className="space-y-4">
       {/* Status Update Message */}
       {message && (
         <div
-          className={`mb-4 p-3 rounded-md flex items-center gap-2 text-sm ${
+          className={`p-3 rounded-md flex items-center gap-2 text-sm ${
             message.type === "success"
               ? "bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-300"
               : "bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-300"
           }`}
         >
           {message.type === "success" ? (
-            <RiCheckLine className="w-4 h-4" />
+            <RiCheckLine className="w-4 h-4 flex-shrink-0" />
           ) : (
-            <RiCloseLine className="w-4 h-4" />
+            <RiCloseLine className="w-4 h-4 flex-shrink-0" />
           )}
           <span>{message.text}</span>
         </div>
       )}
 
-      {/* Record Details */}
-      <div className="space-y-2">
-        {Object.entries(record.fields).map(([key, value]) => {
-          // Special handling for Status field
-          if (key === "Status") {
-            return (
-              <div key={key} className="flex items-center justify-between gap-4">
-                <span className="font-medium text-foreground/70 min-w-fit">{key}:</span>
+      {/* Client Information Section */}
+      <div className="border-b border-border/40 pb-4">
+        <h3 className="text-sm font-semibold text-foreground mb-3 uppercase tracking-wide opacity-70">
+          Client Information
+        </h3>
+        <div className="space-y-3">
+          <div className="flex items-start justify-between">
+            <div>
+              <p className="text-xs font-medium text-foreground/60">Name</p>
+              <p className="text-sm font-medium text-foreground">{fields["Client Name"] || "—"}</p>
+            </div>
+          </div>
 
-                <div className="relative">
-                  <button
-                    onClick={() => setIsOpen(!isOpen)}
-                    disabled={isLoading}
-                    className="w-full px-3 py-2 text-sm border border-border/40 rounded-md bg-background hover:bg-secondary/50 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-between gap-2"
-                  >
-                    <span className="text-foreground">{currentStatus}</span>
-                    {isLoading ? (
-                      <RiLoader4Line className="w-4 h-4 animate-spin" />
-                    ) : (
-                      <span className="text-xs">▼</span>
-                    )}
-                  </button>
+          {fields["Email"] && (
+            <div className="flex items-center gap-2 text-sm">
+              <RiMailLine className="w-4 h-4 text-foreground/50" />
+              <a
+                href={`mailto:${fields["Email"]}`}
+                className="text-blue-600 dark:text-blue-400 hover:underline"
+              >
+                {fields["Email"]}
+              </a>
+            </div>
+          )}
+        </div>
+      </div>
 
-                  {/* Dropdown Menu */}
-                  {isOpen && !isLoading && (
-                    <div className="absolute top-full mt-1 w-full bg-background border border-border/40 rounded-md shadow-md z-10">
-                      {STATUS_OPTIONS.map((status) => (
-                        <button
-                          key={status}
-                          onClick={() => handleStatusChange(status)}
-                          className={`w-full text-left px-3 py-2 text-sm hover:bg-secondary/50 transition-colors ${
-                            status === currentStatus
-                              ? "bg-primary/10 text-primary font-medium"
-                              : "text-foreground"
-                          } ${status === STATUS_OPTIONS[0] ? "rounded-t-md" : ""} ${
-                            status === STATUS_OPTIONS[STATUS_OPTIONS.length - 1] ? "rounded-b-md" : ""
-                          }`}
-                        >
-                          {status}
-                        </button>
-                      ))}
-                    </div>
-                  )}
+      {/* Service Details Section */}
+      <div className="border-b border-border/40 pb-4">
+        <h3 className="text-sm font-semibold text-foreground mb-3 uppercase tracking-wide opacity-70">
+          Service Details
+        </h3>
+        <div className="space-y-3">
+          {fields["Service Type"] && (
+            <div>
+              <p className="text-xs font-medium text-foreground/60">Service Type</p>
+              <p className="text-sm font-medium text-foreground">{fields["Service Type"]}</p>
+            </div>
+          )}
+
+          {fields["Description"] && (
+            <div>
+              <p className="text-xs font-medium text-foreground/60">Description</p>
+              <p className="text-sm text-foreground">{fields["Description"]}</p>
+            </div>
+          )}
+
+          {petNames && (
+            <div>
+              <p className="text-xs font-medium text-foreground/60">Pet Names</p>
+              <p className="text-sm font-medium text-foreground">{petNames}</p>
+            </div>
+          )}
+
+          {firstBookingDate && (
+            <div>
+              <p className="text-xs font-medium text-foreground/60">First Booking Date</p>
+              <p className="text-sm font-medium text-foreground">{formatDate(firstBookingDate)}</p>
+            </div>
+          )}
+
+          {lastBookingDate && (
+            <div>
+              <p className="text-xs font-medium text-foreground/60">Last Booking Date</p>
+              <p className="text-sm font-medium text-foreground">{formatDate(lastBookingDate)}</p>
+            </div>
+          )}
+
+          <div className="flex items-start gap-2 text-sm">
+            <RiMapPinLine className="w-4 h-4 text-foreground/50 mt-0.5 flex-shrink-0" />
+            <div>
+              <p className="text-xs font-medium text-foreground/60 mb-1">Service Address</p>
+              <p className="text-sm text-foreground">
+                {formatAddress(fields)}
+              </p>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {/* Financial Summary Section */}
+      <div className="border-b border-border/40 pb-4">
+        <h3 className="text-sm font-semibold text-foreground mb-3 uppercase tracking-wide opacity-70">
+          Financial Summary
+        </h3>
+        <div className="space-y-2">
+          {fields["Total Price"] !== undefined && (
+            <div className="flex items-center justify-between">
+              <p className="text-sm text-foreground/70">Total Price</p>
+              <p className="text-sm font-semibold text-foreground">
+                {formatCurrency(fields["Total Price"])}
+              </p>
+            </div>
+          )}
+
+          {fields["Deposit Amount"] !== undefined && (
+            <div className="flex items-center justify-between">
+              <p className="text-sm text-foreground/70">Deposit</p>
+              <p className="text-sm font-semibold text-foreground">
+                {formatCurrency(fields["Deposit Amount"])}
+              </p>
+            </div>
+          )}
+
+          {fields["Total Price"] !== undefined && fields["Deposit Amount"] !== undefined && (
+            <div className="flex items-center justify-between pt-2 border-t border-border/40">
+              <p className="text-sm text-foreground/70">Balance Due</p>
+              <p className="text-sm font-semibold text-foreground">
+                {formatCurrency(fields["Total Price"] - fields["Deposit Amount"])}
+              </p>
+            </div>
+          )}
+
+          {fields["Price Per Unit"] !== undefined && (
+            <div className="flex items-center justify-between text-xs">
+              <p className="text-foreground/60">Price Per Unit</p>
+              <p className="text-foreground/80">{formatCurrency(fields["Price Per Unit"])}</p>
+            </div>
+          )}
+
+          {fields["Add-On Price"] !== undefined && (
+            <div className="flex items-center justify-between text-xs">
+              <p className="text-foreground/60">Add-On Price</p>
+              <p className="text-foreground/80">{formatCurrency(fields["Add-On Price"])}</p>
+            </div>
+          )}
+        </div>
+      </div>
+
+      {/* Request Status Section */}
+      <div className="pb-4">
+        <h3 className="text-sm font-semibold text-foreground mb-3 uppercase tracking-wide opacity-70">
+          Request Status
+        </h3>
+        <div className="space-y-3">
+          <div>
+            <p className="text-xs font-medium text-foreground/60 mb-2">Current Status</p>
+            <div className="relative">
+              <button
+                onClick={() => setIsOpen(!isOpen)}
+                disabled={isLoading}
+                className={`w-full px-3 py-2 text-sm border border-border/40 rounded-md bg-background hover:bg-secondary/50 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-between gap-2 ${getStatusColor(currentStatus)}`}
+              >
+                <span className="text-foreground font-medium">{currentStatus}</span>
+                {isLoading ? (
+                  <RiLoader4Line className="w-4 h-4 animate-spin" />
+                ) : (
+                  <span className="text-xs">▼</span>
+                )}
+              </button>
+
+              {/* Dropdown Menu */}
+              {isOpen && !isLoading && (
+                <div className="absolute top-full mt-1 w-full bg-background border border-border/40 rounded-md shadow-md z-10">
+                  {STATUS_OPTIONS.map((status) => (
+                    <button
+                      key={status}
+                      onClick={() => handleStatusChange(status)}
+                      className={`w-full text-left px-3 py-2 text-sm hover:bg-secondary/50 transition-colors ${
+                        status === currentStatus
+                          ? "bg-primary/10 text-primary font-medium"
+                          : "text-foreground"
+                      } ${status === STATUS_OPTIONS[0] ? "rounded-t-md" : ""} ${
+                        status === STATUS_OPTIONS[STATUS_OPTIONS.length - 1] ? "rounded-b-md" : ""
+                      }`}
+                    >
+                      {status}
+                    </button>
+                  ))}
                 </div>
-              </div>
-            )
-          }
+              )}
+            </div>
+          </div>
 
-          // Regular field display
-          return (
-            <div key={key} className="text-sm">
-              <span className="font-medium text-foreground/70">{key}:</span>
-              <span className="ml-2 text-foreground">
-                {typeof value === "object" ? JSON.stringify(value) : String(value)}
+          {fields["Submitted Date"] && (
+            <div className="flex items-center gap-2 text-xs">
+              <RiTimeLine className="w-3 h-3 text-foreground/50" />
+              <span className="text-foreground/70">
+                Submitted {formatDate(fields["Submitted Date"])}
+                {daysPending !== null && <span> ({daysPending} days ago)</span>}
               </span>
             </div>
-          )
-        })}
+          )}
+
+          {fields["Square Invoice Link"] && (
+            <div className="pt-2">
+              <a
+                href={fields["Square Invoice Link"]}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="text-xs text-blue-600 dark:text-blue-400 hover:underline font-medium"
+              >
+                View Invoice →
+              </a>
+            </div>
+          )}
+        </div>
       </div>
     </div>
   )

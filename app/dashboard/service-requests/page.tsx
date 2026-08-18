@@ -1,6 +1,6 @@
 "use client"
 
-import { useMemo, useState } from "react"
+import { useMemo, useState, useEffect } from "react"
 import { useAirtableData } from "@/hooks/useClients"
 import { FloatingSidebar } from "@/components/floating-sidebar"
 import { ThemeToggle } from "@/components/theme-toggle"
@@ -11,12 +11,20 @@ import { SelectDropdown } from "@/components/select-dropdown"
 import { useListControls, type SortOption } from "@/hooks/useListControls"
 import { getStatusColor, DEFAULT_STATUS, STATUS_OPTIONS } from "@/lib/service-request-status"
 import {
+  formatCurrency,
+  formatDate,
+  getDaysPending,
+  getPaymentStatus,
+  formatAddress,
+} from "@/lib/service-request-formatting"
+import {
   RiRefreshLine,
   RiArrowDownSLine,
   RiArrowUpSLine,
   RiExternalLinkLine,
   RiFileCopyLine,
   RiCheckLine,
+  RiAlertLine,
 } from "@remixicon/react"
 
 interface AirtableRecord {
@@ -27,20 +35,35 @@ interface AirtableRecord {
 interface ServiceRequestRow {
   record: AirtableRecord
   clientName: string
+  email?: string
   serviceType: string
   displayDate: string
   dateSort: string
   status: string
   invoiceLink?: string
+  totalPrice?: number
+  depositAmount?: number
+  daysPending: number | null
+  address: string
+  petNames?: string
+  paymentStatus: {
+    text: string
+    percentage: number
+    isOverdue: boolean
+  }
 }
 
 export default function ServiceRequestsPage() {
   const { data: serviceRequests, loading: serviceRequestsLoading, error: serviceRequestsError, refetch: refetchServiceRequests } = useAirtableData(
     process.env.NEXT_PUBLIC_SERVICE_REQUESTS_TABLE_ID || ""
   )
+  const { data: bookings } = useAirtableData(
+    process.env.NEXT_PUBLIC_CONFIRMED_BOOKINGS_TABLE_ID || ""
+  )
 
   const [expandedIds, setExpandedIds] = useState<Set<string>>(new Set())
   const [copiedId, setCopiedId] = useState<string | null>(null)
+  const [petNamesByRequest, setPetNamesByRequest] = useState<Record<string, string>>({})
 
   const toggleExpanded = (recordId: string) => {
     const newSet = new Set(expandedIds)
@@ -51,6 +74,72 @@ export default function ServiceRequestsPage() {
     }
     setExpandedIds(newSet)
   }
+
+  const getEarliestBookingDate = (requestId: string): string | null => {
+    if (!bookings || bookings.length === 0) return null
+
+    const linkedBookings = bookings.filter((booking: any) => {
+      const requestIds = booking.fields["Request ID"]
+      if (!requestIds) return false
+      const idsArray = Array.isArray(requestIds) ? requestIds : [requestIds]
+      return idsArray.includes(requestId)
+    })
+
+    if (linkedBookings.length === 0) return null
+
+    const dates = linkedBookings
+      .map((booking: any) => booking.fields["Date"])
+      .filter((date: string) => date && date !== "")
+      .sort()
+
+    return dates.length > 0 ? dates[0] : null
+  }
+
+  const getLinkedBookings = (requestId: string) => {
+    if (!bookings || bookings.length === 0) return []
+
+    return bookings.filter((booking: any) => {
+      const requestIds = booking.fields["Request ID"]
+      if (!requestIds) return false
+      const idsArray = Array.isArray(requestIds) ? requestIds : [requestIds]
+      return idsArray.includes(requestId)
+    })
+  }
+
+  // Fetch pet names for all service requests in parallel
+  useEffect(() => {
+    const fetchAllPetNames = async () => {
+      const petNames: Record<string, string> = {}
+
+      const fetchPromises = serviceRequests
+        .map(async (request) => {
+          const linkedBookings = getLinkedBookings(request.id)
+          if (linkedBookings.length > 0) {
+            try {
+              const response = await fetch("/api/bookings/details", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ bookingId: linkedBookings[0].id }),
+              })
+              const data = await response.json()
+              if (data.pets) {
+                petNames[request.id] = data.pets
+              }
+            } catch (error) {
+              console.error(`Error fetching pet names for request ${request.id}:`, error)
+            }
+          }
+          return { id: request.id, petName: petNames[request.id] }
+        })
+
+      await Promise.all(fetchPromises)
+      setPetNamesByRequest(petNames)
+    }
+
+    if (serviceRequests.length > 0 && bookings.length > 0) {
+      fetchAllPetNames()
+    }
+  }, [serviceRequests, bookings])
 
   const copyToClipboard = (text: string, recordId: string) => {
     navigator.clipboard.writeText(text)
@@ -95,20 +184,30 @@ export default function ServiceRequestsPage() {
     () =>
       serviceRequests.map((request) => {
         const submittedDate = request.fields["Submitted Date"] || "—"
-        const createdTime = request.fields["Created"]
-          ? new Date(request.fields["Created"]).toLocaleTimeString("en-US", { hour: "2-digit", minute: "2-digit" })
-          : ""
+        const earliestBookingDate = getEarliestBookingDate(request.id)
+        const totalPrice = request.fields["Total Price"]
+        const depositAmount = request.fields["Deposit Amount"]
+        const status = request.fields["Status"] || DEFAULT_STATUS
+        const daysPending = getDaysPending(request.fields["Submitted Date"])
+
         return {
           record: request,
           clientName: request.fields["Client Name"] || "Unknown",
+          email: request.fields["Email"],
           serviceType: request.fields["Service Type"] || "—",
-          displayDate: createdTime ? `${submittedDate} ${createdTime}` : submittedDate,
-          dateSort: request.fields["Submitted Date"] || "",
-          status: request.fields["Status"] || DEFAULT_STATUS,
+          displayDate: earliestBookingDate ? formatDate(earliestBookingDate) : formatDate(submittedDate),
+          dateSort: earliestBookingDate || request.fields["Submitted Date"] || "",
+          status,
           invoiceLink: request.fields["Square Invoice Link"],
+          totalPrice,
+          depositAmount,
+          daysPending,
+          address: formatAddress(request.fields),
+          petNames: petNamesByRequest[request.id],
+          paymentStatus: getPaymentStatus(depositAmount, totalPrice, status),
         }
       }),
-    [serviceRequests]
+    [serviceRequests, bookings, petNamesByRequest]
   )
 
   const sortOptions: SortOption<ServiceRequestRow>[] = [
@@ -210,15 +309,26 @@ export default function ServiceRequestsPage() {
               </div>
 
               {/* Header Row */}
-              <div className="sticky top-16 bg-background/95 backdrop-blur-sm border-b border-border/40 p-4 flex items-center gap-4 z-10">
-                <div className="flex-1 grid grid-cols-4 gap-4">
-                  <div className="text-xs font-semibold text-muted-foreground uppercase">Client Name</div>
-                  <div className="text-xs font-semibold text-muted-foreground uppercase">Service Type</div>
-                  <div className="text-xs font-semibold text-muted-foreground uppercase">Date Submitted</div>
-                  <div className="text-xs font-semibold text-muted-foreground uppercase">Status</div>
-                </div>
-                <div className="flex-shrink-0 flex flex-col items-center gap-1">
-                  <div className="text-xs font-semibold text-muted-foreground uppercase">Invoice</div>
+              <div className="sticky top-16 bg-background/95 backdrop-blur-sm border-b border-border/40 p-4 z-10">
+                <div className="grid grid-cols-12 gap-4 items-center">
+                  <div className="col-span-2">
+                    <div className="text-xs font-semibold text-muted-foreground uppercase">Client</div>
+                  </div>
+                  <div className="col-span-2">
+                    <div className="text-xs font-semibold text-muted-foreground uppercase">Service</div>
+                  </div>
+                  <div className="col-span-2">
+                    <div className="text-xs font-semibold text-muted-foreground uppercase">Status</div>
+                  </div>
+                  <div className="col-span-2">
+                    <div className="text-xs font-semibold text-muted-foreground uppercase">Payment</div>
+                  </div>
+                  <div className="col-span-2">
+                    <div className="text-xs font-semibold text-muted-foreground uppercase">Address</div>
+                  </div>
+                  <div className="col-span-2 flex justify-end">
+                    <div className="text-xs font-semibold text-muted-foreground uppercase">Actions</div>
+                  </div>
                 </div>
               </div>
 
@@ -233,25 +343,73 @@ export default function ServiceRequestsPage() {
                 const isExpanded = expandedIds.has(request.id)
 
                 return (
-                  <div key={request.id} className="border border-border/40 rounded-lg overflow-hidden">
+                  <div key={request.id} className={`border rounded-lg overflow-hidden transition-colors ${
+                    isExpanded
+                      ? "border-border bg-secondary/20"
+                      : "border-border/40 hover:border-border/60 hover:bg-secondary/30"
+                  }`}>
                     {/* Summary Row */}
                     <div
                       onClick={() => toggleExpanded(request.id)}
-                      className="bg-card hover:bg-secondary/50 transition-colors p-4 flex items-center gap-4 cursor-pointer"
+                      className="p-4 cursor-pointer"
                     >
-                      <div className="flex-1 grid grid-cols-4 gap-4">
-                        <div className="text-sm font-medium">{row.clientName}</div>
-                        <div className="text-sm">{row.serviceType}</div>
-                        <div className="text-sm">{row.displayDate}</div>
-                        <div className="text-sm">
-                          <span className={`inline-block px-2 py-1 rounded-full text-xs font-medium ${getStatusColor(row.status)}`}>
+                      <div className="grid grid-cols-12 gap-4 items-start">
+                        {/* Client Name */}
+                        <div className="col-span-2 min-w-0">
+                          <p className="text-sm font-semibold text-foreground truncate">
+                            {row.clientName}
+                          </p>
+                          {row.email && (
+                            <p className="text-xs text-foreground/60 truncate">
+                              {row.email}
+                            </p>
+                          )}
+                        </div>
+
+                        {/* Service Type */}
+                        <div className="col-span-2 min-w-0">
+                          <p className="text-sm text-foreground/80">{row.serviceType}</p>
+                          <p className="text-xs text-foreground/50">{row.displayDate}</p>
+                        </div>
+
+                        {/* Status */}
+                        <div className="col-span-2">
+                          <span className={`inline-flex items-center px-2 py-1 rounded-full text-xs font-medium ${getStatusColor(row.status)}`}>
                             {row.status}
                           </span>
+                          {row.daysPending !== null && (
+                            <p className="text-xs text-foreground/50 mt-1">
+                              {row.daysPending} days pending
+                            </p>
+                          )}
                         </div>
-                      </div>
 
-                      <div className="flex flex-col items-center gap-1 flex-shrink-0">
-                        <div className="flex items-center gap-1">
+                        {/* Payment Status */}
+                        <div className="col-span-2">
+                          <div className="space-y-1">
+                            <div className="flex items-center gap-1">
+                              {row.paymentStatus.isOverdue && (
+                                <RiAlertLine className="w-3 h-3 text-red-500" />
+                              )}
+                              <p className="text-sm font-medium text-foreground">
+                                {row.totalPrice ? formatCurrency(row.totalPrice) : "—"}
+                              </p>
+                            </div>
+                            <p className="text-xs text-foreground/60">
+                              {row.paymentStatus.text}
+                            </p>
+                          </div>
+                        </div>
+
+                        {/* Address */}
+                        <div className="col-span-2">
+                          <p className="text-sm text-foreground/80 truncate" title={row.address}>
+                            {row.address}
+                          </p>
+                        </div>
+
+                        {/* Actions */}
+                        <div className="col-span-2 flex justify-end items-start gap-2">
                           <Button
                             variant="outline"
                             size="sm"
@@ -280,21 +438,23 @@ export default function ServiceRequestsPage() {
                               <RiFileCopyLine className="w-4 h-4" />
                             )}
                           </Button>
+                          {isExpanded ? (
+                            <RiArrowUpSLine className="w-5 h-5 text-muted-foreground" />
+                          ) : (
+                            <RiArrowDownSLine className="w-5 h-5 text-muted-foreground" />
+                          )}
                         </div>
-                        {isExpanded ? (
-                          <RiArrowUpSLine className="w-5 h-5 text-muted-foreground" />
-                        ) : (
-                          <RiArrowDownSLine className="w-5 h-5 text-muted-foreground" />
-                        )}
                       </div>
                     </div>
 
                     {/* Expanded Detail */}
                     {isExpanded && (
-                      <div className="border-t border-border/40 bg-secondary/20 p-4 space-y-4">
+                      <div className="border-t border-border bg-secondary/10 p-6">
                         <ServiceRequestCard
                           record={request}
                           onStatusUpdate={handleStatusUpdate}
+                          bookings={bookings}
+                          petNames={row.petNames}
                         />
                       </div>
                     )}
