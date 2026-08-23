@@ -23,6 +23,23 @@ interface ServiceRequestCardProps {
   petNames?: string
 }
 
+// Helper function to format DD/MM/YYYY dates to readable format
+function formatDDMMYYYY(dateString: string): string {
+  if (!dateString) return "—"
+  try {
+    const [day, month, year] = dateString.split("/").map(Number)
+    const dateObj = new Date(year, month - 1, day)
+    return dateObj.toLocaleDateString("en-US", {
+      weekday: "short",
+      month: "short",
+      day: "numeric",
+      year: "numeric",
+    })
+  } catch {
+    return dateString
+  }
+}
+
 export function ServiceRequestCard({ record, onStatusUpdate, bookings = [], petNames }: ServiceRequestCardProps) {
   const [isLoading, setIsLoading] = useState(false)
   const [message, setMessage] = useState<{ type: "success" | "error"; text: string } | null>(null)
@@ -31,22 +48,38 @@ export function ServiceRequestCard({ record, onStatusUpdate, bookings = [], petN
   const fields = record.fields
   const currentStatus = fields["Status"] || DEFAULT_STATUS
 
-  // Get linked bookings for this service request
-  const linkedBookings = bookings.filter((booking: any) => {
-    const requestIds = booking.fields["Request ID"]
-    if (!requestIds) return false
-    const idsArray = Array.isArray(requestIds) ? requestIds : [requestIds]
-    return idsArray.includes(record.id)
-  })
+  // Parse preferred dates from "Preferred Date and Time" field
+  const preferredDatesRaw = fields["Preferred Date and Time"] || ""
 
-  // Get booking dates
-  const bookingDates = linkedBookings
-    .map((booking: any) => booking.fields["Date"])
-    .filter((date: string) => date && date !== "")
-    .sort()
+  // Extract dates from the preferred dates field
+  // Handles format like "04/09/2026 | Exact Time: 10:00"
+  const preferredDates = preferredDatesRaw
+    ? preferredDatesRaw
+        .split(/[,\n]/) // Split by comma or newline
+        .map((item: string) => {
+          // Remove quotes and clean up
+          item = item.trim().replace(/^["']|["']$/g, "")
+          // Extract just the date part (DD/MM/YYYY) before the pipe
+          const dateMatch = item.match(/(\d{2}\/\d{2}\/\d{4})/)
+          return dateMatch ? dateMatch[1] : null
+        })
+        .filter((date: string | null): date is string => date !== null && date !== "")
+        .filter((date: string, index: number, arr: string[]) => {
+          // Remove duplicates
+          return arr.indexOf(date) === index
+        })
+        .sort((a: string, b: string) => {
+          // Sort by date (DD/MM/YYYY format)
+          const [dA, mA, yA] = a.split("/").map(Number)
+          const [dB, mB, yB] = b.split("/").map(Number)
+          const dateA = new Date(yA, mA - 1, dA)
+          const dateB = new Date(yB, mB - 1, dB)
+          return dateA.getTime() - dateB.getTime()
+        })
+    : []
 
-  const firstBookingDate = bookingDates.length > 0 ? bookingDates[0] : null
-  const lastBookingDate = bookingDates.length > 1 ? bookingDates[bookingDates.length - 1] : null
+  const firstBookingDate = preferredDates.length > 0 ? preferredDates[0] : null
+  const lastBookingDate = preferredDates.length > 1 ? preferredDates[preferredDates.length - 1] : null
 
   const handleStatusChange = async (newStatus: string) => {
     if (newStatus === currentStatus || !onStatusUpdate) return
@@ -156,27 +189,27 @@ export function ServiceRequestCard({ record, onStatusUpdate, bookings = [], petN
           {firstBookingDate && (
             <div>
               <p className="text-xs font-medium text-foreground/60">First Booking Date</p>
-              <p className="text-sm font-medium text-foreground">{formatDate(firstBookingDate)}</p>
+              <p className="text-sm font-medium text-foreground">{formatDDMMYYYY(firstBookingDate)}</p>
             </div>
           )}
 
           {lastBookingDate && (
             <div>
               <p className="text-xs font-medium text-foreground/60">Last Booking Date</p>
-              <p className="text-sm font-medium text-foreground">{formatDate(lastBookingDate)}</p>
+              <p className="text-sm font-medium text-foreground">{formatDDMMYYYY(lastBookingDate)}</p>
             </div>
           )}
 
-          {bookingDates.length > 0 && (
+          {preferredDates.length > 0 && (
             <div>
-              <p className="text-xs font-medium text-foreground/60 mb-2">All Booking Dates ({bookingDates.length})</p>
+              <p className="text-xs font-medium text-foreground/60 mb-2">All Requested Dates ({preferredDates.length})</p>
               <div className="flex flex-wrap gap-2">
-                {bookingDates.map((date, index) => (
+                {preferredDates.map((date, index) => (
                   <div
                     key={`${date}-${index}`}
                     className="px-3 py-2 rounded-md bg-primary/10 border border-primary/20"
                   >
-                    <p className="text-sm font-medium text-foreground">{formatDate(date)}</p>
+                    <p className="text-sm font-medium text-foreground">{formatDDMMYYYY(date)}</p>
                   </div>
                 ))}
               </div>

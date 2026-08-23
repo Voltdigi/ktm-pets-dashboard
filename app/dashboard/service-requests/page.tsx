@@ -1,6 +1,6 @@
 "use client"
 
-import { useMemo, useState, useEffect } from "react"
+import { useMemo, useState, useEffect, Suspense } from "react"
 import { useSearchParams } from "next/navigation"
 import { useAirtableData } from "@/hooks/useClients"
 import { FloatingSidebar } from "@/components/floating-sidebar"
@@ -54,7 +54,7 @@ interface ServiceRequestRow {
   }
 }
 
-export default function ServiceRequestsPage() {
+function ServiceRequestsContent() {
   const searchParams = useSearchParams()
   const statusFromUrl = searchParams.get("status")
 
@@ -522,5 +522,13 @@ export default function ServiceRequestsPage() {
         </div>
       </main>
     </div>
+  )
+}
+
+export default function ServiceRequestsPage() {
+  return (
+    <Suspense fallback={<div className="min-h-screen flex items-center justify-center">Loading...</div>}>
+      <ServiceRequestsContent />
+    </Suspense>
   )
 }
