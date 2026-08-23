@@ -167,6 +167,22 @@ export function ServiceRequestCard({ record, onStatusUpdate, bookings = [], petN
             </div>
           )}
 
+          {bookingDates.length > 0 && (
+            <div>
+              <p className="text-xs font-medium text-foreground/60 mb-2">All Booking Dates ({bookingDates.length})</p>
+              <div className="flex flex-wrap gap-2">
+                {bookingDates.map((date, index) => (
+                  <div
+                    key={`${date}-${index}`}
+                    className="px-3 py-2 rounded-md bg-primary/10 border border-primary/20"
+                  >
+                    <p className="text-sm font-medium text-foreground">{formatDate(date)}</p>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
           <div className="flex items-start gap-2 text-sm">
             <RiMapPinLine className="w-4 h-4 text-foreground/50 mt-0.5 flex-shrink-0" />
             <div>
