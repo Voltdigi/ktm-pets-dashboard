@@ -196,7 +196,7 @@ export default function ServiceRequestsPage() {
           email: request.fields["Email"],
           serviceType: request.fields["Service Type"] || "—",
           displayDate: earliestBookingDate ? formatDate(earliestBookingDate) : formatDate(submittedDate),
-          dateSort: earliestBookingDate || request.fields["Submitted Date"] || "",
+          dateSort: request.fields["Submitted Date"] || "",
           status,
           invoiceLink: request.fields["Square Invoice Link"],
           totalPrice,
