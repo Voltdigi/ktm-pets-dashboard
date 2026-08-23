@@ -64,6 +64,7 @@ export default function ServiceRequestsPage() {
   const [expandedIds, setExpandedIds] = useState<Set<string>>(new Set())
   const [copiedId, setCopiedId] = useState<string | null>(null)
   const [petNamesByRequest, setPetNamesByRequest] = useState<Record<string, string>>({})
+  const [serviceTypeFilter, setServiceTypeFilter] = useState<string>("all")
 
   const toggleExpanded = (recordId: string) => {
     const newSet = new Set(expandedIds)
@@ -222,7 +223,18 @@ export default function ServiceRequestsPage() {
     ...STATUS_OPTIONS.map((s) => ({ value: s, label: s })),
   ]
 
-  const { search, setSearch, filterValue, setFilterValue, sortValue, setSortValue, filteredData } =
+  // Get unique service types for filter options
+  const uniqueServiceTypes = useMemo(() => {
+    const types = new Set(rows.map((r) => r.serviceType).filter((type) => type !== "—"))
+    return Array.from(types).sort()
+  }, [rows])
+
+  const serviceTypeFilterOptions = [
+    { value: "all", label: "All Service Types" },
+    ...uniqueServiceTypes.map((type) => ({ value: type, label: type })),
+  ]
+
+  const { search, setSearch, filterValue, setFilterValue, sortValue, setSortValue, filteredData: statusFilteredData } =
     useListControls({
       data: rows,
       getSearchableValues: (r) => [r.clientName, r.serviceType, r.displayDate, r.status],
@@ -230,6 +242,14 @@ export default function ServiceRequestsPage() {
       defaultSortValue: "date-desc",
       getFilterValue: (r) => r.status,
     })
+
+  // Apply service type filter on top of status filter
+  const filteredData = useMemo(() => {
+    if (serviceTypeFilter === "all") {
+      return statusFilteredData
+    }
+    return statusFilteredData.filter((row) => row.serviceType === serviceTypeFilter)
+  }, [statusFilteredData, serviceTypeFilter])
 
   return (
     <div className="min-h-screen bg-background text-foreground">
@@ -285,27 +305,52 @@ export default function ServiceRequestsPage() {
           )}
 
           {!loading && !error && serviceRequests.length > 0 && (
-            <div className="space-y-2">
+            <div className="space-y-3">
               {/* Controls */}
-              <div className="flex flex-col sm:flex-row gap-2 mb-2">
-                <SearchInput
-                  value={search}
-                  onChange={setSearch}
-                  placeholder="Search service requests..."
-                  className="sm:max-w-xs"
-                />
-                <SelectDropdown
-                  value={filterValue}
-                  onValueChange={setFilterValue}
-                  options={statusFilterOptions}
-                  placeholder="Status"
-                />
-                <SelectDropdown
-                  value={sortValue}
-                  onValueChange={setSortValue}
-                  options={sortOptions.map(({ value, label }) => ({ value, label }))}
-                  placeholder="Sort by"
-                />
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-2">
+                {/* Search Control */}
+                <div className="space-y-1.5">
+                  <label className="text-xs font-semibold text-muted-foreground uppercase">Search</label>
+                  <SearchInput
+                    value={search}
+                    onChange={setSearch}
+                    placeholder="Client, service, date..."
+                    className="w-full"
+                  />
+                </div>
+
+                {/* Status Filter */}
+                <div className="space-y-1.5">
+                  <label className="text-xs font-semibold text-muted-foreground uppercase">Status</label>
+                  <SelectDropdown
+                    value={filterValue}
+                    onValueChange={setFilterValue}
+                    options={statusFilterOptions}
+                    placeholder="All Statuses"
+                  />
+                </div>
+
+                {/* Service Type Filter */}
+                <div className="space-y-1.5">
+                  <label className="text-xs font-semibold text-muted-foreground uppercase">Service Type</label>
+                  <SelectDropdown
+                    value={serviceTypeFilter}
+                    onValueChange={setServiceTypeFilter}
+                    options={serviceTypeFilterOptions}
+                    placeholder="All Service Types"
+                  />
+                </div>
+
+                {/* Sort Control */}
+                <div className="space-y-1.5">
+                  <label className="text-xs font-semibold text-muted-foreground uppercase">Sort By</label>
+                  <SelectDropdown
+                    value={sortValue}
+                    onValueChange={setSortValue}
+                    options={sortOptions.map(({ value, label }) => ({ value, label }))}
+                    placeholder="Date Submitted (Newest)"
+                  />
+                </div>
               </div>
 
               {/* Header Row */}
