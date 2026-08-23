@@ -1,12 +1,13 @@
 "use client"
 
 import Link from "next/link"
-import { useMemo } from "react"
+import { useMemo, useState } from "react"
 import { useAirtableData } from "@/hooks/useClients"
 import { FloatingSidebar } from "@/components/floating-sidebar"
 import { ThemeToggle } from "@/components/theme-toggle"
 import { Card, CardContent } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
+import { ServiceRequestCard } from "@/components/service-request-card"
 import { STATUS_OPTIONS, DEFAULT_STATUS, getStatusStyle } from "@/lib/service-request-status"
 import {
   RiRefreshLine,
@@ -17,6 +18,7 @@ import {
   RiCheckboxCircleLine,
   RiCloseCircleLine,
   RiArrowRightLine,
+  RiCloseLine,
 } from "@remixicon/react"
 
 const STATUS_ICONS: Record<string, React.ElementType> = {
@@ -34,6 +36,43 @@ export default function DashboardPage() {
     error,
     refetch,
   } = useAirtableData(process.env.NEXT_PUBLIC_SERVICE_REQUESTS_TABLE_ID || "")
+
+  const { data: bookings } = useAirtableData(
+    process.env.NEXT_PUBLIC_CONFIRMED_BOOKINGS_TABLE_ID || ""
+  )
+
+  const [selectedRequest, setSelectedRequest] = useState<any>(null)
+  const [isModalOpen, setIsModalOpen] = useState(false)
+
+  const handleStatusUpdate = async (recordId: string, newStatus: string) => {
+    try {
+      const response = await fetch("/api/square/update-service-request", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          recordId,
+          newStatus,
+        }),
+      })
+
+      const result = await response.json()
+
+      if (!response.ok) {
+        throw new Error(result.error || result.message || "Failed to update status")
+      }
+
+      // Refresh data after successful update
+      setTimeout(() => {
+        refetch()
+      }, 1000)
+
+      return result
+    } catch (error) {
+      throw error
+    }
+  }
 
   const statusCounts = useMemo(() => {
     const counts: Record<string, number> = {}
@@ -213,7 +252,24 @@ export default function DashboardPage() {
                   )}
 
                   {!loading && recentRequests.length > 0 && (
-                    <div className="space-y-2">
+                    <div className="space-y-3">
+                      {/* Header Row */}
+                      <div className="grid grid-cols-12 gap-4 px-3 py-2 border-b border-border/40">
+                        <div className="col-span-3">
+                          <p className="text-xs font-semibold text-muted-foreground uppercase">Client</p>
+                        </div>
+                        <div className="col-span-3">
+                          <p className="text-xs font-semibold text-muted-foreground uppercase">Service Type</p>
+                        </div>
+                        <div className="col-span-3">
+                          <p className="text-xs font-semibold text-muted-foreground uppercase">Date Submitted</p>
+                        </div>
+                        <div className="col-span-3">
+                          <p className="text-xs font-semibold text-muted-foreground uppercase">Status</p>
+                        </div>
+                      </div>
+
+                      {/* Request Rows */}
                       {recentRequests.map((request) => {
                         const status = request.fields["Status"] || DEFAULT_STATUS
                         const clientName = request.fields["Client Name"] || "Unknown"
@@ -223,22 +279,32 @@ export default function DashboardPage() {
                         return (
                           <div
                             key={request.id}
-                            className="flex items-center justify-between gap-4 p-3 rounded-lg border border-border/40 hover:bg-secondary/50 transition-colors"
+                            onClick={() => {
+                              setSelectedRequest(request)
+                              setIsModalOpen(true)
+                            }}
+                            className="grid grid-cols-12 gap-4 p-3 rounded-lg border border-border/40 hover:bg-secondary/50 transition-colors cursor-pointer items-center"
                           >
-                            <div className="min-w-0 flex-1 grid grid-cols-3 gap-4">
-                              <span className="text-sm font-medium truncate">{clientName}</span>
-                              <span className="text-sm text-muted-foreground truncate">
+                            <div className="col-span-3 min-w-0">
+                              <span className="text-sm font-medium truncate block">{clientName}</span>
+                            </div>
+                            <div className="col-span-3 min-w-0">
+                              <span className="text-sm text-muted-foreground truncate block">
                                 {serviceType}
                               </span>
-                              <span className="text-sm text-muted-foreground truncate">
+                            </div>
+                            <div className="col-span-3 min-w-0">
+                              <span className="text-sm text-muted-foreground truncate block">
                                 {submittedDate}
                               </span>
                             </div>
-                            <span
-                              className={`inline-block px-2 py-1 rounded-full text-xs font-medium whitespace-nowrap ${getStatusStyle(status).badge}`}
-                            >
-                              {status}
-                            </span>
+                            <div className="col-span-3">
+                              <span
+                                className={`inline-block px-2 py-1 rounded-full text-xs font-medium whitespace-nowrap ${getStatusStyle(status).badge}`}
+                              >
+                                {status}
+                              </span>
+                            </div>
                           </div>
                         )
                       })}
@@ -250,6 +316,41 @@ export default function DashboardPage() {
           )}
         </div>
       </main>
+
+      {/* Service Request Details Modal */}
+      {isModalOpen && selectedRequest && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50">
+          <div className="bg-background rounded-lg border border-border max-w-2xl w-full max-h-[90vh] overflow-y-auto shadow-lg">
+            {/* Modal Header */}
+            <div className="sticky top-0 z-10 flex items-center justify-between p-6 border-b border-border/40 bg-background">
+              <div>
+                <h2 className="text-lg font-semibold text-foreground">
+                  {selectedRequest.fields["Client Name"] || "Unknown"}
+                </h2>
+                <p className="text-sm text-muted-foreground mt-1">
+                  {selectedRequest.fields["Service Type"] || "—"}
+                </p>
+              </div>
+              <button
+                onClick={() => setIsModalOpen(false)}
+                className="p-2 hover:bg-secondary/50 rounded-md transition-colors"
+                aria-label="Close modal"
+              >
+                <RiCloseLine className="w-5 h-5" />
+              </button>
+            </div>
+
+            {/* Modal Content */}
+            <div className="p-6">
+              <ServiceRequestCard
+                record={selectedRequest}
+                onStatusUpdate={handleStatusUpdate}
+                bookings={bookings}
+              />
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   )
 }
