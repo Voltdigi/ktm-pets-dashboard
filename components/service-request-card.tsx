@@ -204,7 +204,7 @@ export function ServiceRequestCard({ record, onStatusUpdate, bookings = [], petN
             <div>
               <p className="text-xs font-medium text-foreground/60 mb-2">All Requested Dates ({preferredDates.length})</p>
               <div className="flex flex-wrap gap-2">
-                {preferredDates.map((date, index) => (
+                {preferredDates.map((date: string, index: number) => (
                   <div
                     key={`${date}-${index}`}
                     className="px-3 py-2 rounded-md bg-primary/10 border border-primary/20"
