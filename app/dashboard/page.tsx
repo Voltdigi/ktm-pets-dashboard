@@ -147,8 +147,8 @@ export default function DashboardPage() {
             <>
               {/* KPI Row */}
               <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-6">
-                <Card>
-                  <CardContent className="flex flex-col gap-2">
+                <Card className="min-h-[120px]">
+                  <CardContent className="flex flex-col gap-2 h-full justify-center">
                     <div className="flex items-center gap-2 text-muted-foreground">
                       <RiFileListLine className="w-4 h-4" />
                       <span className="text-xs font-medium uppercase tracking-wide">Total</span>
@@ -162,19 +162,21 @@ export default function DashboardPage() {
                 {STATUS_OPTIONS.map((status) => {
                   const Icon = STATUS_ICONS[status]
                   return (
-                    <Card key={status}>
-                      <CardContent className="flex flex-col gap-2">
-                        <div className="flex items-center gap-2 text-muted-foreground">
-                          <Icon className="w-4 h-4" />
-                          <span className="text-xs font-medium uppercase tracking-wide">
-                            {status}
+                    <Link key={status} href={`/dashboard/service-requests?status=${encodeURIComponent(status)}`}>
+                      <Card className="cursor-pointer hover:border-primary/50 hover:bg-primary/5 transition-all min-h-[120px]">
+                        <CardContent className="flex flex-col gap-2 h-full justify-center">
+                          <div className="flex items-center gap-2 text-muted-foreground">
+                            <Icon className="w-4 h-4" />
+                            <span className="text-xs font-medium uppercase tracking-wide">
+                              {status}
+                            </span>
+                          </div>
+                          <span className="text-3xl font-semibold tabular-nums">
+                            {loading ? "—" : statusCounts[status]}
                           </span>
-                        </div>
-                        <span className="text-3xl font-semibold tabular-nums">
-                          {loading ? "—" : statusCounts[status]}
-                        </span>
-                      </CardContent>
-                    </Card>
+                        </CardContent>
+                      </Card>
+                    </Link>
                   )
                 })}
               </div>

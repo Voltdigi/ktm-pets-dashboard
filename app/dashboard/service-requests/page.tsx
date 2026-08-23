@@ -1,6 +1,7 @@
 "use client"
 
 import { useMemo, useState, useEffect } from "react"
+import { useSearchParams } from "next/navigation"
 import { useAirtableData } from "@/hooks/useClients"
 import { FloatingSidebar } from "@/components/floating-sidebar"
 import { ThemeToggle } from "@/components/theme-toggle"
@@ -54,6 +55,9 @@ interface ServiceRequestRow {
 }
 
 export default function ServiceRequestsPage() {
+  const searchParams = useSearchParams()
+  const statusFromUrl = searchParams.get("status")
+
   const { data: serviceRequests, loading: serviceRequestsLoading, error: serviceRequestsError, refetch: refetchServiceRequests } = useAirtableData(
     process.env.NEXT_PUBLIC_SERVICE_REQUESTS_TABLE_ID || ""
   )
@@ -242,6 +246,13 @@ export default function ServiceRequestsPage() {
       defaultSortValue: "date-desc",
       getFilterValue: (r) => r.status,
     })
+
+  // Initialize status filter from URL parameter
+  useEffect(() => {
+    if (statusFromUrl) {
+      setFilterValue(statusFromUrl)
+    }
+  }, [statusFromUrl, setFilterValue])
 
   // Apply service type filter on top of status filter
   const filteredData = useMemo(() => {
