@@ -1,37 +1,57 @@
-import Airtable from "airtable";
 import { NextRequest, NextResponse } from "next/server";
+import { getCachedTable, invalidateTable } from "@/lib/airtable";
 
-const airtable = new Airtable({
-  apiKey: process.env.AIRTABLE_API_KEY,
-});
+// Map table IDs (from env) to our internal table key for the cache layer
+function tableIdToKey(
+  tableId: string
+): "clients" | "pets" | "serviceRequests" | "bookings" {
+  const tableMap: Record<string, "clients" | "pets" | "serviceRequests" | "bookings"> = {
+    [process.env.NEXT_PUBLIC_CLIENTS_TABLE_ID || ""]: "clients",
+    [process.env.NEXT_PUBLIC_PETS_TABLE_ID || ""]: "pets",
+    [process.env.NEXT_PUBLIC_SERVICE_REQUESTS_TABLE_ID || ""]: "serviceRequests",
+    [process.env.NEXT_PUBLIC_CONFIRMED_BOOKINGS_TABLE_ID || ""]: "bookings",
+  };
+  const key = tableMap[tableId];
+  if (!key) throw new Error(`Unknown table ID: ${tableId}`);
+  return key;
+}
 
 export async function GET(request: NextRequest) {
   try {
-    const baseId = process.env.NEXT_PUBLIC_BASE_ID;
     const tableIdParam = request.nextUrl.searchParams.get("tableId");
+    const force = request.nextUrl.searchParams.get("force") === "1";
 
-    if (!baseId || !tableIdParam) {
-      throw new Error("Missing Airtable credentials or table ID");
+    if (!tableIdParam) {
+      return NextResponse.json(
+        {
+          success: false,
+          error: "Missing table ID",
+        },
+        { status: 400 }
+      );
     }
 
-    const base = airtable.base(baseId);
-    const table = base.table(tableIdParam);
+    const tableKey = tableIdToKey(tableIdParam);
 
-    const records = await table.select().all();
+    // If force=1, invalidate the cache first (used by manual refresh buttons).
+    if (force) {
+      await invalidateTable(tableKey);
+    }
+
+    // Fetch from the cached layer (or real Airtable if cache miss).
+    const data = await getCachedTable(tableKey);
 
     return NextResponse.json({
       success: true,
-      data: records.map((record: any) => ({
-        id: record.id,
-        fields: record.fields,
-      })),
+      data,
     });
   } catch (error) {
-    console.error("Airtable error:", error);
+    const errorMsg = error instanceof Error ? error.message : "Unknown error";
+    console.error("[Airtable API error]:", errorMsg);
     return NextResponse.json(
       {
         success: false,
-        error: error instanceof Error ? error.message : "Unknown error",
+        error: errorMsg,
       },
       { status: 500 }
     );

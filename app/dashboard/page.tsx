@@ -2,7 +2,7 @@
 
 import Link from "next/link"
 import { useMemo, useState } from "react"
-import { useAirtableData } from "@/hooks/useClients"
+import { useDashboardData } from "@/contexts/dashboard-data-context"
 import { FloatingSidebar } from "@/components/floating-sidebar"
 import { ThemeToggle } from "@/components/theme-toggle"
 import { Card, CardContent } from "@/components/ui/card"
@@ -31,15 +31,11 @@ const STATUS_ICONS: Record<string, React.ElementType> = {
 
 export default function DashboardPage() {
   const {
-    data: serviceRequests,
-    loading,
+    serviceRequests,
+    isLoading: loading,
     error,
-    refetch,
-  } = useAirtableData(process.env.NEXT_PUBLIC_SERVICE_REQUESTS_TABLE_ID || "")
-
-  const { data: bookings } = useAirtableData(
-    process.env.NEXT_PUBLIC_CONFIRMED_BOOKINGS_TABLE_ID || ""
-  )
+    refreshServiceRequests,
+  } = useDashboardData()
 
   const [selectedRequest, setSelectedRequest] = useState<any>(null)
   const [isModalOpen, setIsModalOpen] = useState(false)
@@ -65,7 +61,7 @@ export default function DashboardPage() {
 
       // Refresh data after successful update
       setTimeout(() => {
-        refetch()
+        refreshServiceRequests()
       }, 1000)
 
       return result
@@ -113,7 +109,7 @@ export default function DashboardPage() {
           </div>
 
           <div className="flex items-center gap-2">
-            <Button variant="outline" size="sm" onClick={refetch} disabled={loading}>
+            <Button variant="outline" size="sm" onClick={refreshServiceRequests} disabled={loading}>
               <RiRefreshLine className={`w-4 h-4 ${loading ? "animate-spin" : ""}`} />
             </Button>
             <ThemeToggle />
@@ -138,7 +134,7 @@ export default function DashboardPage() {
             <Card>
               <CardContent className="text-center py-8 text-red-600 dark:text-red-400">
                 <p className="font-medium">Error loading data</p>
-                <p className="text-sm mt-1">{error}</p>
+                <p className="text-sm mt-1">{error instanceof Error ? error.message : String(error)}</p>
               </CardContent>
             </Card>
           )}
@@ -347,7 +343,6 @@ export default function DashboardPage() {
               <ServiceRequestCard
                 record={selectedRequest}
                 onStatusUpdate={handleStatusUpdate}
-                bookings={bookings}
               />
             </div>
           </div>

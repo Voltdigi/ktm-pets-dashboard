@@ -1,7 +1,8 @@
 "use client"
 
-import { useState, useEffect } from "react"
-import { useAirtableData } from "@/hooks/useClients"
+import { useState, useMemo } from "react"
+import { useDashboardData } from "@/contexts/dashboard-data-context"
+import { resolveBookingDetails } from "@/lib/airtable-joins"
 import { FloatingSidebar } from "@/components/floating-sidebar"
 import { ThemeToggle } from "@/components/theme-toggle"
 import { Card } from "@/components/ui/card"
@@ -37,73 +38,61 @@ interface BookingDisplay {
 }
 
 export default function ConfirmedBookingsPage() {
-  const { data: bookings, loading, error, refetch } = useAirtableData(
-    process.env.NEXT_PUBLIC_CONFIRMED_BOOKINGS_TABLE_ID || ""
-  )
+  const {
+    bookings,
+    serviceRequestsById,
+    petsByClientId,
+    isLoading: loading,
+    error,
+    refreshBookings,
+  } = useDashboardData()
 
   const [currentDate, setCurrentDate] = useState(new Date())
-  const [bookingsByDate, setBookingsByDate] = useState<Map<string, BookingDisplay[]>>(new Map())
   const [selectedBooking, setSelectedBooking] = useState<BookingDisplay | null>(null)
-  const [bookingDetails, setBookingDetails] = useState<any>(null)
-  const [detailsLoading, setDetailsLoading] = useState(false)
 
-  useEffect(() => {
-    const fetchPetNames = async () => {
-      const map = new Map<string, BookingDisplay[]>()
+  // Resolve the selected booking's details (service request, client info, address)
+  const selectedBookingResolved = useMemo(() => {
+    if (!selectedBooking) return null
+    // Find the full booking record by ID
+    const fullBooking = bookings.find(b => b.id === selectedBooking.id)
+    if (!fullBooking) return null
+    return resolveBookingDetails(fullBooking, {
+      serviceRequestsById,
+      petsByClientId,
+    })
+  }, [selectedBooking, bookings, serviceRequestsById, petsByClientId])
 
-      const promises = bookings.map(async (booking: any) => {
-        const date = booking.fields["Date"]
-        if (!date) return null
+  // Compute bookings by date and resolve pet names in-memory (no async fetch).
+  const bookingsByDate = useMemo(() => {
+    const map = new Map<string, BookingDisplay[]>()
 
-        let petNames = "Unknown"
+    for (const booking of bookings) {
+      const date = booking.fields["Date"]
+      if (!date) continue
 
-        try {
-          const response = await fetch("/api/bookings/details", {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ bookingId: booking.id }),
-          })
-          const data = await response.json()
-          if (data.pets) {
-            petNames = data.pets
-          } else if (data.error) {
-            console.error("API error:", data.error)
-          }
-        } catch (error) {
-          console.error("Error fetching pet names:", error)
-        }
-
-        return {
-          id: booking.id,
-          date,
-          serviceType: booking.fields["Service Type"] || "Service",
-          time: booking.fields["Time"] || "TBD",
-          duration: booking.fields["Duration"] || "",
-          petNames,
-          fields: booking.fields,
-        }
+      const resolved = resolveBookingDetails(booking, {
+        serviceRequestsById,
+        petsByClientId,
       })
 
-      const displayBookings = await Promise.all(promises)
+      const display: BookingDisplay = {
+        id: booking.id,
+        date,
+        serviceType: booking.fields["Service Type"] || "Service",
+        time: booking.fields["Time"] || "TBD",
+        duration: booking.fields["Duration"] || "",
+        petNames: resolved.pets,
+        fields: booking.fields,
+      }
 
-      displayBookings.forEach((display) => {
-        if (display) {
-          if (!map.has(display.date)) {
-            map.set(display.date, [])
-          }
-          map.get(display.date)!.push(display)
-        }
-      })
-
-      setBookingsByDate(map)
+      if (!map.has(date)) {
+        map.set(date, [])
+      }
+      map.get(date)!.push(display)
     }
 
-    if (bookings.length > 0) {
-      fetchPetNames()
-    } else {
-      setBookingsByDate(new Map())
-    }
-  }, [bookings])
+    return map
+  }, [bookings, serviceRequestsById, petsByClientId])
 
   const getDaysInMonth = (date: Date) => {
     return new Date(date.getFullYear(), date.getMonth() + 1, 0).getDate()
@@ -170,7 +159,7 @@ export default function ConfirmedBookingsPage() {
             <Button
               variant="outline"
               size="sm"
-              onClick={refetch}
+              onClick={refreshBookings}
               disabled={loading}
             >
               <RiRefreshLine className={`w-4 h-4 ${loading ? "animate-spin" : ""}`} />
@@ -188,7 +177,7 @@ export default function ConfirmedBookingsPage() {
             {error && (
               <div className="text-center py-8 text-red-600 dark:text-red-400 mb-6">
                 <p className="font-medium">Error loading bookings</p>
-                <p className="text-sm mt-1">{error}</p>
+                <p className="text-sm mt-1">{error instanceof Error ? error.message : String(error)}</p>
               </div>
             )}
 
@@ -249,22 +238,6 @@ export default function ConfirmedBookingsPage() {
                                 key={i}
                                 onClick={() => {
                                   setSelectedBooking(booking)
-                                  setBookingDetails(null)
-                                  setDetailsLoading(true)
-                                  fetch("/api/bookings/details", {
-                                    method: "POST",
-                                    headers: { "Content-Type": "application/json" },
-                                    body: JSON.stringify({ bookingId: booking.id }),
-                                  })
-                                    .then(res => res.json())
-                                    .then(data => {
-                                      setBookingDetails(data)
-                                      setDetailsLoading(false)
-                                    })
-                                    .catch(err => {
-                                      console.error(err)
-                                      setDetailsLoading(false)
-                                    })
                                 }}
                                 className="bg-primary/10 text-primary rounded px-0.5 py-0.5 line-clamp-1 hover:line-clamp-none cursor-pointer hover:bg-primary/20 transition-colors"
                                 title={`${booking.petNames} - ${booking.serviceType} at ${booking.time}${
@@ -316,31 +289,21 @@ export default function ConfirmedBookingsPage() {
             </div>
 
             <div className="p-6 space-y-6">
-              {detailsLoading ? (
-                <div className="text-center py-8 text-muted-foreground">
-                  Loading details...
-                </div>
-              ) : bookingDetails?.error ? (
-                <div className="text-center py-8 text-red-600">
-                  Error loading details
-                </div>
-              ) : (
-                <>
-                  <div className="space-y-4">
-                    <h4 className="font-semibold text-foreground">Service</h4>
-                    <div className="grid grid-cols-2 gap-4">
-                      <div>
-                        <div className="text-xs font-semibold text-muted-foreground uppercase mb-1">
-                          Service Type
-                        </div>
-                        <div className="text-sm">
-                          {selectedBooking.serviceType}
-                        </div>
-                      </div>
-                      <div>
-                        <div className="text-xs font-semibold text-muted-foreground uppercase mb-1">
-                          Duration
-                        </div>
+              <div className="space-y-4">
+                <h4 className="font-semibold text-foreground">Service</h4>
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <div className="text-xs font-semibold text-muted-foreground uppercase mb-1">
+                      Service Type
+                    </div>
+                    <div className="text-sm">
+                      {selectedBooking.serviceType}
+                    </div>
+                  </div>
+                  <div>
+                    <div className="text-xs font-semibold text-muted-foreground uppercase mb-1">
+                      Duration
+                    </div>
                         <div className="text-sm">
                           {selectedBooking.duration || "—"}
                         </div>
@@ -367,7 +330,7 @@ export default function ConfirmedBookingsPage() {
                     </div>
                   </div>
 
-                  {bookingDetails?.serviceRequest && (
+                  {selectedBookingResolved?.serviceRequest && (
                     <div className="space-y-4 border-t border-border/40 pt-6">
                       <h4 className="font-semibold text-foreground">Client</h4>
                       <div className="grid grid-cols-2 gap-4">
@@ -376,7 +339,7 @@ export default function ConfirmedBookingsPage() {
                             Name
                           </div>
                           <div className="text-sm">
-                            {bookingDetails.serviceRequest["Client Name"] || "—"}
+                            {selectedBookingResolved.serviceRequest["Client Name"] || "—"}
                           </div>
                         </div>
                         <div>
@@ -384,7 +347,7 @@ export default function ConfirmedBookingsPage() {
                             Email
                           </div>
                           <div className="text-sm">
-                            {bookingDetails.serviceRequest["Email"] || "—"}
+                            {selectedBookingResolved.serviceRequest["Email"] || "—"}
                           </div>
                         </div>
                         <div>
@@ -392,7 +355,7 @@ export default function ConfirmedBookingsPage() {
                             Phone
                           </div>
                           <div className="text-sm">
-                            {bookingDetails.serviceRequest["Phone Number"] || "—"}
+                            {selectedBookingResolved.serviceRequest["Phone Number"] || "—"}
                           </div>
                         </div>
                         <div>
@@ -400,14 +363,14 @@ export default function ConfirmedBookingsPage() {
                             Pets
                           </div>
                           <div className="text-sm">
-                            {bookingDetails.pets || "—"}
+                            {selectedBooking.petNames || "—"}
                           </div>
                         </div>
                       </div>
                     </div>
                   )}
 
-                  {bookingDetails?.address && (
+                  {selectedBookingResolved?.address && (
                     <div className="space-y-4 border-t border-border/40 pt-6">
                       <h4 className="font-semibold text-foreground">Location</h4>
                       <div>
@@ -415,7 +378,7 @@ export default function ConfirmedBookingsPage() {
                           Address
                         </div>
                         <div className="text-sm">
-                          {bookingDetails.address}
+                          {selectedBookingResolved.address}
                         </div>
                       </div>
                     </div>
@@ -436,8 +399,6 @@ export default function ConfirmedBookingsPage() {
                       ))}
                     </div>
                   </div>
-                </>
-              )}
             </div>
           </Card>
         </div>

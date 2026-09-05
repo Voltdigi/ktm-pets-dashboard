@@ -1,7 +1,7 @@
 "use client"
 
 import { useMemo, useState } from "react"
-import { useAirtableData } from "@/hooks/useClients"
+import { useDashboardData } from "@/contexts/dashboard-data-context"
 import { FloatingSidebar } from "@/components/floating-sidebar"
 import { ThemeToggle } from "@/components/theme-toggle"
 import { Card } from "@/components/ui/card"
@@ -30,12 +30,13 @@ interface PetRow {
 }
 
 export default function PetsPage() {
-  const { data: pets, loading: petsLoading, error: petsError, refetch: refetchPets } = useAirtableData(
-    process.env.NEXT_PUBLIC_PETS_TABLE_ID || ""
-  )
-  const { data: clients, loading: clientsLoading, error: clientsError, refetch: refetchClients } = useAirtableData(
-    process.env.NEXT_PUBLIC_CLIENTS_TABLE_ID || ""
-  )
+  const {
+    pets,
+    clients,
+    isLoading: petsLoading,
+    error: petsError,
+    refreshAll,
+  } = useDashboardData()
 
   const [expandedIds, setExpandedIds] = useState<Set<string>>(new Set())
 
@@ -74,13 +75,8 @@ export default function PetsPage() {
     return []
   }
 
-  const refetchAll = () => {
-    refetchPets()
-    refetchClients()
-  }
-
-  const loading = petsLoading || clientsLoading
-  const error = petsError || clientsError
+  const loading = petsLoading
+  const error = petsError
 
   const rows: PetRow[] = useMemo(
     () =>
@@ -141,7 +137,7 @@ export default function PetsPage() {
             <Button
               variant="outline"
               size="sm"
-              onClick={refetchAll}
+              onClick={refreshAll}
               disabled={loading}
             >
               <RiRefreshLine className={`w-4 h-4 ${loading ? "animate-spin" : ""}`} />
@@ -166,7 +162,7 @@ export default function PetsPage() {
           {error && (
             <div className="text-center py-12 text-red-600 dark:text-red-400">
               <p className="font-medium">Error loading data</p>
-              <p className="text-sm mt-1">{error}</p>
+              <p className="text-sm mt-1">{error instanceof Error ? error.message : String(error)}</p>
             </div>
           )}
 

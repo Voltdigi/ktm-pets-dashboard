@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import Airtable from "airtable";
+import { invalidateTable } from "@/lib/airtable";
 import {
   createOrGetSquareCustomer,
   createInvoice,
@@ -154,6 +155,9 @@ export async function POST(request: NextRequest) {
 
         const updatedRecord = await updateServiceRequestStatus(recordId, newStatus, updateData);
 
+        // Invalidate the cached service requests so clients see the update immediately
+        await invalidateTable("serviceRequests");
+
         return NextResponse.json({
           success: true,
           message: "Status updated and invoice created",
@@ -187,6 +191,9 @@ export async function POST(request: NextRequest) {
 
     // For other status changes (like "Rejected"), just update the status
     const updatedRecord = await updateServiceRequestStatus(recordId, newStatus);
+
+    // Invalidate the cached service requests so clients see the update immediately
+    await invalidateTable("serviceRequests");
 
     return NextResponse.json({
       success: true,

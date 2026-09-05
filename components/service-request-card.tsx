@@ -16,10 +16,6 @@ interface ServiceRequestCardProps {
     fields: Record<string, any>
   }
   onStatusUpdate?: (recordId: string, newStatus: string) => Promise<void>
-  bookings?: Array<{
-    id: string
-    fields: Record<string, any>
-  }>
   petNames?: string
 }
 
@@ -40,7 +36,7 @@ function formatDDMMYYYY(dateString: string): string {
   }
 }
 
-export function ServiceRequestCard({ record, onStatusUpdate, bookings = [], petNames }: ServiceRequestCardProps) {
+export function ServiceRequestCard({ record, onStatusUpdate, petNames }: ServiceRequestCardProps) {
   const [isLoading, setIsLoading] = useState(false)
   const [message, setMessage] = useState<{ type: "success" | "error"; text: string } | null>(null)
   const [isOpen, setIsOpen] = useState(false)

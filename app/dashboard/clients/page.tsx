@@ -1,7 +1,7 @@
 "use client"
 
 import { useMemo, useState } from "react"
-import { useAirtableData } from "@/hooks/useClients"
+import { useDashboardData } from "@/contexts/dashboard-data-context"
 import { FloatingSidebar } from "@/components/floating-sidebar"
 import { ThemeToggle } from "@/components/theme-toggle"
 import { Card } from "@/components/ui/card"
@@ -32,15 +32,14 @@ interface ClientRow {
 }
 
 export default function ClientsPage() {
-  const { data: clients, loading: clientsLoading, error: clientsError, refetch: refetchClients } = useAirtableData(
-    process.env.NEXT_PUBLIC_CLIENTS_TABLE_ID || ""
-  )
-  const { data: pets, loading: petsLoading, error: petsError, refetch: refetchPets } = useAirtableData(
-    process.env.NEXT_PUBLIC_PETS_TABLE_ID || ""
-  )
-  const { data: bookings, loading: bookingsLoading, error: bookingsError, refetch: refetchBookings } = useAirtableData(
-    process.env.NEXT_PUBLIC_CONFIRMED_BOOKINGS_TABLE_ID || ""
-  )
+  const {
+    clients,
+    pets,
+    bookings,
+    isLoading: clientsLoading,
+    error: clientsError,
+    refreshAll,
+  } = useDashboardData()
 
   const [expandedIds, setExpandedIds] = useState<Set<string>>(new Set())
 
@@ -106,14 +105,8 @@ export default function ClientsPage() {
     return { label: "No upcoming bookings", sortKey: Infinity }
   }
 
-  const refetchAll = () => {
-    refetchClients()
-    refetchPets()
-    refetchBookings()
-  }
-
-  const loading = clientsLoading || petsLoading || bookingsLoading
-  const error = clientsError || petsError || bookingsError
+  const loading = clientsLoading
+  const error = clientsError
 
   const rows: ClientRow[] = useMemo(
     () =>
@@ -165,7 +158,7 @@ export default function ClientsPage() {
             <Button
               variant="outline"
               size="sm"
-              onClick={refetchAll}
+              onClick={refreshAll}
               disabled={loading}
             >
               <RiRefreshLine className={`w-4 h-4 ${loading ? "animate-spin" : ""}`} />
@@ -190,7 +183,7 @@ export default function ClientsPage() {
           {error && (
             <div className="text-center py-12 text-red-600 dark:text-red-400">
               <p className="font-medium">Error loading data</p>
-              <p className="text-sm mt-1">{error}</p>
+              <p className="text-sm mt-1">{error instanceof Error ? error.message : String(error)}</p>
             </div>
           )}
 

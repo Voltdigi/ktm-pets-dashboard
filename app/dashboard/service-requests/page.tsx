@@ -2,7 +2,8 @@
 
 import { useMemo, useState, useEffect, Suspense } from "react"
 import { useSearchParams } from "next/navigation"
-import { useAirtableData } from "@/hooks/useClients"
+import { useDashboardData } from "@/contexts/dashboard-data-context"
+import { getLinkedBookingsForRequest, resolveBookingDetails } from "@/lib/airtable-joins"
 import { FloatingSidebar } from "@/components/floating-sidebar"
 import { ThemeToggle } from "@/components/theme-toggle"
 import { ServiceRequestCard } from "@/components/service-request-card"
@@ -58,16 +59,18 @@ function ServiceRequestsContent() {
   const searchParams = useSearchParams()
   const statusFromUrl = searchParams.get("status")
 
-  const { data: serviceRequests, loading: serviceRequestsLoading, error: serviceRequestsError, refetch: refetchServiceRequests } = useAirtableData(
-    process.env.NEXT_PUBLIC_SERVICE_REQUESTS_TABLE_ID || ""
-  )
-  const { data: bookings } = useAirtableData(
-    process.env.NEXT_PUBLIC_CONFIRMED_BOOKINGS_TABLE_ID || ""
-  )
+  const {
+    serviceRequests,
+    bookings,
+    isLoading: serviceRequestsLoading,
+    error: serviceRequestsError,
+    refreshServiceRequests,
+    serviceRequestsById,
+    petsByClientId,
+  } = useDashboardData()
 
   const [expandedIds, setExpandedIds] = useState<Set<string>>(new Set())
   const [copiedId, setCopiedId] = useState<string | null>(null)
-  const [petNamesByRequest, setPetNamesByRequest] = useState<Record<string, string>>({})
   const [serviceTypeFilter, setServiceTypeFilter] = useState<string>("all")
 
   const toggleExpanded = (recordId: string) => {
@@ -111,40 +114,23 @@ function ServiceRequestsContent() {
     })
   }
 
-  // Fetch pet names for all service requests in parallel
-  useEffect(() => {
-    const fetchAllPetNames = async () => {
-      const petNames: Record<string, string> = {}
+  // Compute pet names for all service requests in-memory (no async fetch).
+  const petNamesByRequest = useMemo(() => {
+    const result: Record<string, string> = {}
 
-      const fetchPromises = serviceRequests
-        .map(async (request) => {
-          const linkedBookings = getLinkedBookings(request.id)
-          if (linkedBookings.length > 0) {
-            try {
-              const response = await fetch("/api/bookings/details", {
-                method: "POST",
-                headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({ bookingId: linkedBookings[0].id }),
-              })
-              const data = await response.json()
-              if (data.pets) {
-                petNames[request.id] = data.pets
-              }
-            } catch (error) {
-              console.error(`Error fetching pet names for request ${request.id}:`, error)
-            }
-          }
-          return { id: request.id, petName: petNames[request.id] }
+    for (const request of serviceRequests) {
+      const linkedBookings = getLinkedBookingsForRequest(bookings, request.id)
+      if (linkedBookings.length > 0) {
+        const resolved = resolveBookingDetails(linkedBookings[0], {
+          serviceRequestsById,
+          petsByClientId,
         })
-
-      await Promise.all(fetchPromises)
-      setPetNamesByRequest(petNames)
+        result[request.id] = resolved.pets
+      }
     }
 
-    if (serviceRequests.length > 0 && bookings.length > 0) {
-      fetchAllPetNames()
-    }
-  }, [serviceRequests, bookings])
+    return result
+  }, [serviceRequests, bookings, serviceRequestsById, petsByClientId])
 
   const copyToClipboard = (text: string, recordId: string) => {
     navigator.clipboard.writeText(text)
@@ -173,7 +159,7 @@ function ServiceRequestsContent() {
 
       // Refresh data after successful update
       setTimeout(() => {
-        refetchServiceRequests()
+        refreshServiceRequests()
       }, 1000)
 
       return result
@@ -280,7 +266,7 @@ function ServiceRequestsContent() {
             <Button
               variant="outline"
               size="sm"
-              onClick={refetchServiceRequests}
+              onClick={refreshServiceRequests}
               disabled={loading}
             >
               <RiRefreshLine className={`w-4 h-4 ${loading ? "animate-spin" : ""}`} />
@@ -305,7 +291,7 @@ function ServiceRequestsContent() {
           {error && (
             <div className="text-center py-12 text-red-600 dark:text-red-400">
               <p className="font-medium">Error loading data</p>
-              <p className="text-sm mt-1">{error}</p>
+              <p className="text-sm mt-1">{error instanceof Error ? error.message : String(error)}</p>
             </div>
           )}
 
@@ -509,7 +495,6 @@ function ServiceRequestsContent() {
                         <ServiceRequestCard
                           record={request}
                           onStatusUpdate={handleStatusUpdate}
-                          bookings={bookings}
                           petNames={row.petNames}
                         />
                       </div>
