@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useMemo } from "react"
+import { useState, useMemo, Suspense, lazy } from "react"
 import { useDashboardData } from "@/contexts/dashboard-data-context"
 import { resolveBookingDetails } from "@/lib/airtable-joins"
 import { FloatingSidebar } from "@/components/floating-sidebar"
@@ -8,12 +8,17 @@ import { ThemeToggle } from "@/components/theme-toggle"
 import { Card } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import {
-  RiArrowLeftSLine,
-  RiArrowRightSLine,
   RiRefreshLine,
   RiCloseLine,
   RiCalendarLine,
 } from "@remixicon/react"
+
+// Lazy load calendar grid for better first paint performance
+const CalendarGrid = lazy(() =>
+  import("@/components/calendar-grid").then((mod) => ({
+    default: mod.CalendarGrid,
+  }))
+)
 
 interface Booking {
   id: string
@@ -94,41 +99,10 @@ export default function ConfirmedBookingsPage() {
     return map
   }, [bookings, serviceRequestsById, petsByClientId])
 
-  const getDaysInMonth = (date: Date) => {
-    return new Date(date.getFullYear(), date.getMonth() + 1, 0).getDate()
-  }
-
-  const getFirstDayOfMonth = (date: Date) => {
-    return new Date(date.getFullYear(), date.getMonth(), 1).getDay()
-  }
-
+  // Helper to format date as YYYY-MM-DD
   const formatDate = (year: number, month: number, day: number) => {
     return `${year}-${String(month + 1).padStart(2, "0")}-${String(day).padStart(2, "0")}`
   }
-
-  const previousMonth = () => {
-    setCurrentDate(new Date(currentDate.getFullYear(), currentDate.getMonth() - 1))
-  }
-
-  const nextMonth = () => {
-    setCurrentDate(new Date(currentDate.getFullYear(), currentDate.getMonth() + 1))
-  }
-
-  const daysInMonth = getDaysInMonth(currentDate)
-  const firstDay = getFirstDayOfMonth(currentDate)
-  const days = []
-  const year = currentDate.getFullYear()
-  const month = currentDate.getMonth()
-
-  for (let i = 0; i < firstDay; i++) {
-    days.push(null)
-  }
-
-  for (let day = 1; day <= daysInMonth; day++) {
-    days.push(day)
-  }
-
-  const monthName = currentDate.toLocaleDateString("en-US", { month: "long", year: "numeric" })
 
   return (
     <div className="min-h-screen bg-background text-foreground">
@@ -181,82 +155,15 @@ export default function ConfirmedBookingsPage() {
               </div>
             )}
 
-            <div className="flex items-center justify-between mb-3">
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={previousMonth}
-              >
-                <RiArrowLeftSLine className="w-4 h-4" />
-              </Button>
-              <h2 className="text-lg font-semibold">{monthName}</h2>
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={nextMonth}
-              >
-                <RiArrowRightSLine className="w-4 h-4" />
-              </Button>
-            </div>
-
-            <div className="grid grid-cols-7 gap-0.5 mb-1">
-              {["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"].map((day) => (
-                <div
-                  key={day}
-                  className="text-center text-xs font-semibold text-muted-foreground py-1"
-                >
-                  {day}
-                </div>
-              ))}
-            </div>
-
-            <div className="grid grid-cols-7 gap-0.5 bg-secondary/20 p-0.5 rounded-lg">
-              {days.map((day, index) => {
-                const dateStr = day
-                  ? formatDate(year, month, day)
-                  : null
-                const dayBookings = dateStr ? bookingsByDate.get(dateStr) : []
-
-                return (
-                  <div
-                    key={index}
-                    className={`min-h-24 p-1 rounded border transition-colors text-xs ${
-                      day
-                        ? "bg-card border-border/40 hover:bg-secondary/50"
-                        : "bg-transparent border-transparent"
-                    }`}
-                  >
-                    {day && (
-                      <>
-                        <div className="text-xs font-semibold mb-1 text-foreground">
-                          {day}
-                        </div>
-                        <div className="space-y-0.5 overflow-y-auto max-h-20">
-                          {dayBookings && dayBookings.length > 0 ? (
-                            dayBookings.map((booking, i) => (
-                              <div
-                                key={i}
-                                onClick={() => {
-                                  setSelectedBooking(booking)
-                                }}
-                                className="bg-primary/10 text-primary rounded px-0.5 py-0.5 line-clamp-1 hover:line-clamp-none cursor-pointer hover:bg-primary/20 transition-colors"
-                                title={`${booking.petNames} - ${booking.serviceType} at ${booking.time}${
-                                  booking.duration ? ` (${booking.duration})` : ""
-                                }`}
-                              >
-                                <div className="font-medium truncate text-xs">
-                                  {booking.petNames}
-                                </div>
-                              </div>
-                            ))
-                          ) : null}
-                        </div>
-                      </>
-                    )}
-                  </div>
-                )
-              })}
-            </div>
+            {/* Lazy load calendar grid to improve first paint performance */}
+            <Suspense fallback={<div className="text-center py-12 text-muted-foreground">Loading calendar...</div>}>
+              <CalendarGrid
+                currentDate={currentDate}
+                onDateChange={setCurrentDate}
+                bookingsByDate={bookingsByDate}
+                onSelectBooking={setSelectedBooking}
+              />
+            </Suspense>
 
             {loading && (
               <div className="text-center py-8 text-muted-foreground">

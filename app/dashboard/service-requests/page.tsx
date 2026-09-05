@@ -67,6 +67,7 @@ function ServiceRequestsContent() {
     refreshServiceRequests,
     serviceRequestsById,
     petsByClientId,
+    bookingsByRequestId,
   } = useDashboardData()
 
   const [expandedIds, setExpandedIds] = useState<Set<string>>(new Set())
@@ -84,14 +85,8 @@ function ServiceRequestsContent() {
   }
 
   const getEarliestBookingDate = (requestId: string): string | null => {
-    if (!bookings || bookings.length === 0) return null
-
-    const linkedBookings = bookings.filter((booking: any) => {
-      const requestIds = booking.fields["Request ID"]
-      if (!requestIds) return false
-      const idsArray = Array.isArray(requestIds) ? requestIds : [requestIds]
-      return idsArray.includes(requestId)
-    })
+    // Use O(1) lookup instead of O(n) filter
+    const linkedBookings = bookingsByRequestId.get(requestId) ?? []
 
     if (linkedBookings.length === 0) return null
 
@@ -104,14 +99,8 @@ function ServiceRequestsContent() {
   }
 
   const getLinkedBookings = (requestId: string) => {
-    if (!bookings || bookings.length === 0) return []
-
-    return bookings.filter((booking: any) => {
-      const requestIds = booking.fields["Request ID"]
-      if (!requestIds) return false
-      const idsArray = Array.isArray(requestIds) ? requestIds : [requestIds]
-      return idsArray.includes(requestId)
-    })
+    // Use O(1) lookup instead of O(n) filter
+    return bookingsByRequestId.get(requestId) ?? []
   }
 
   // Compute pet names for all service requests in-memory (no async fetch).
@@ -198,7 +187,7 @@ function ServiceRequestsContent() {
           paymentStatus: getPaymentStatus(depositAmount, totalPrice, status),
         }
       }),
-    [serviceRequests, bookings, petNamesByRequest]
+    [serviceRequests, bookingsByRequestId, petNamesByRequest]
   )
 
   const sortOptions: SortOption<ServiceRequestRow>[] = [

@@ -2,7 +2,7 @@
 
 import useSWR from "swr";
 import { createContext, useContext, useMemo } from "react";
-import { buildPetsByClientId, buildById } from "@/lib/airtable-joins";
+import { buildPetsByClientId, buildById, buildRequestIdToBookings } from "@/lib/airtable-joins";
 import type { AirtableRecord } from "@/lib/airtable";
 
 const fetcher = (url: string) =>
@@ -59,6 +59,7 @@ interface DashboardDataContextType {
   petsByClientId: Map<string, string[]>;
   serviceRequestsById: Map<string, AirtableRecord>;
   clientsById: Map<string, AirtableRecord>;
+  bookingsByRequestId: Map<string, AirtableRecord[]>;
   isLoading: boolean;
   error?: Error;
   refreshClients: () => void;
@@ -89,6 +90,11 @@ export function DashboardDataProvider({ children }: { children: React.ReactNode 
 
   const clientsById = useMemo(() => buildById(clients.data), [clients.data]);
 
+  const bookingsByRequestId = useMemo(
+    () => buildRequestIdToBookings(bookings.data),
+    [bookings.data]
+  );
+
   const isLoading =
     clients.isLoading ||
     pets.isLoading ||
@@ -106,6 +112,7 @@ export function DashboardDataProvider({ children }: { children: React.ReactNode 
     petsByClientId,
     serviceRequestsById,
     clientsById,
+    bookingsByRequestId,
     isLoading,
     error,
     refreshClients: clients.refresh,

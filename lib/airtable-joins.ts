@@ -45,7 +45,39 @@ export function getClientIdFromServiceRequest(
 }
 
 /**
+ * Build a map of request IDs → bookings for fast O(1) lookups.
+ * Replaces the expensive O(n*m) getLinkedBookingsForRequest filter operations.
+ *
+ * @param bookings - Array of booking records
+ * @returns Map of request ID → array of linked bookings
+ */
+export function buildRequestIdToBookings(
+  bookings: AirtableRecord[]
+): Map<string, AirtableRecord[]> {
+  const map = new Map<string, AirtableRecord[]>();
+
+  for (const booking of bookings) {
+    const requestIds = booking.fields["Request ID"];
+    const idArray = Array.isArray(requestIds)
+      ? requestIds
+      : requestIds
+      ? [requestIds]
+      : [];
+
+    for (const requestId of idArray) {
+      if (!map.has(requestId)) {
+        map.set(requestId, []);
+      }
+      map.get(requestId)!.push(booking);
+    }
+  }
+
+  return map;
+}
+
+/**
  * Find all bookings linked to a service request via the "Request ID" field.
+ * @deprecated Use buildRequestIdToBookings() for better performance
  */
 export function getLinkedBookingsForRequest(
   bookings: AirtableRecord[],

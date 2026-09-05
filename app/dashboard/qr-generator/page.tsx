@@ -1,7 +1,6 @@
 "use client"
 
 import { useRef, useState, useEffect } from "react"
-import { FloatingSidebar } from "@/components/floating-sidebar"
 import { ThemeToggle } from "@/components/theme-toggle"
 import {
   Card,
@@ -30,21 +29,20 @@ export default function QRGeneratorPage() {
   const containerRef = useRef<HTMLDivElement>(null)
 
   useEffect(() => {
-    // Detect if dark mode is enabled
-    const darkMode = document.documentElement.classList.contains("dark")
-    setIsDark(darkMode)
+    // Detect if dark mode is enabled using media query
+    const mediaQuery = window.matchMedia("(prefers-color-scheme: dark)")
 
-    const observer = new MutationObserver(() => {
-      const isDarkNow = document.documentElement.classList.contains("dark")
-      setIsDark(isDarkNow)
-    })
+    const handleChange = (e: MediaQueryListEvent) => {
+      setIsDark(e.matches)
+    }
 
-    observer.observe(document.documentElement, {
-      attributes: true,
-      attributeFilter: ["class"],
-    })
+    // Set initial value
+    setIsDark(mediaQuery.matches)
 
-    return () => observer.disconnect()
+    // Listen for changes
+    mediaQuery.addEventListener("change", handleChange)
+
+    return () => mediaQuery.removeEventListener("change", handleChange)
   }, [])
 
   const isValidUrl = (urlString: string): boolean => {
@@ -114,9 +112,6 @@ export default function QRGeneratorPage() {
           </div>
         </div>
       </header>
-
-      {/* Floating Sidebar */}
-      <FloatingSidebar />
 
       {/* Main Content */}
       <main className="px-4 py-8 sm:px-6 lg:px-8">
