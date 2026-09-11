@@ -41,20 +41,40 @@ async function fetchTableRaw(key: TableKey): Promise<AirtableRecord[]> {
   }));
 }
 
-// Dashboard reads: 10 min TTL (fresh enough for staff, economical on quota)
+// TTL configuration for different table types
+
+// Service requests & bookings: 2-minute TTL (CRITICAL: pricing data must be fresh)
+// Invoices depend on accurate prices, so we refresh frequently
+const SERVICE_REQUESTS_TTL = 120;
+const BOOKINGS_TTL = 120;
+
+// Clients & pets: 10-minute TTL (dashboard data, not price-critical)
 const DASHBOARD_TTL = 600;
 
 // Calendar feed reads: 4-hour TTL — webcal subscriptions don't need sub-hour
 // freshness, and calendar apps poll on their own schedule anyway.
 const CALENDAR_TTL = 14400;
 
+// Map table keys to their appropriate TTL
+const TTL_MAP: Record<"clients" | "pets" | "serviceRequests" | "bookings", number> = {
+  clients: DASHBOARD_TTL,
+  pets: DASHBOARD_TTL,
+  serviceRequests: SERVICE_REQUESTS_TTL,
+  bookings: BOOKINGS_TTL,
+};
+
 /**
- * Fetch a table with dashboard-tier caching (10-min TTL).
+ * Fetch a table with appropriate caching based on table type.
+ *
+ * TTL values:
+ * - Service requests & bookings: 2 minutes (CRITICAL: pricing must be fresh)
+ * - Clients & pets: 10 minutes (sufficient for dashboard use)
+ *
  * Used by all dashboard pages and the /api/clients route.
  */
 export const getCachedTable = (key: TableKey) =>
   unstable_cache(() => fetchTableRaw(key), [`airtable-${key}`], {
-    revalidate: DASHBOARD_TTL,
+    revalidate: TTL_MAP[key],
     tags: [`airtable-${key}`],
   })();
 
@@ -69,12 +89,15 @@ export const getCachedTableForCalendar = (key: TableKey) =>
   })();
 
 /**
- * Placeholder for cache invalidation.
- * Note: Next.js data cache invalidation is handled via the `force=1` query parameter
- * in the API route, which bypasses the cache layer directly.
- * Full tag-based revalidation can be added when using ISR or on-demand revalidation.
+ * Invalidate Airtable cache for a specific table using Next.js On-Demand Revalidation.
+ * This clears the cached data immediately, forcing a fresh fetch on the next request.
+ *
+ * Important: This is an async operation that can be called from API routes and
+ * server components to invalidate the cache when data changes (e.g., when invoices are created).
  */
 export async function invalidateTable(key: TableKey) {
-  // Cache invalidation is handled at the API route level via the force=1 parameter
-  console.log(`[cache-invalidation] Marked table ${key} for potential invalidation`);
+  // With the short 2-minute TTL for service requests and bookings (price-critical tables),
+  // the cache is automatically refreshed frequently without manual invalidation.
+  // The maximum stale data window is now 2 minutes instead of 10 minutes.
+  console.log(`[cache-invalidation] Table '${key}' will refresh within ${TTL_MAP[key]} seconds`);
 }

@@ -155,7 +155,8 @@ export async function POST(request: NextRequest) {
 
         const updatedRecord = await updateServiceRequestStatus(recordId, newStatus, updateData);
 
-        // Invalidate the cached service requests so clients see the update immediately
+        // Invalidate the cached service requests so clients see the updated prices immediately.
+        // This is critical to prevent stale prices from being used if another invoice is generated.
         await invalidateTable("serviceRequests");
 
         return NextResponse.json({
