@@ -34,6 +34,7 @@ export default function DashboardPage() {
     serviceRequests,
     isLoading: loading,
     error,
+    refreshAll,
     refreshServiceRequests,
   } = useDashboardData()
 
@@ -109,7 +110,7 @@ export default function DashboardPage() {
           </div>
 
           <div className="flex items-center gap-2">
-            <Button variant="outline" size="sm" onClick={refreshServiceRequests} disabled={loading}>
+            <Button variant="outline" size="sm" onClick={refreshAll} disabled={loading}>
               <RiRefreshLine className={`w-4 h-4 ${loading ? "animate-spin" : ""}`} />
             </Button>
             <ThemeToggle />
